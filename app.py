@@ -16,6 +16,8 @@ from generate_rag_pie import generate_rag_pie
 app = Flask(__name__)
 app.secret_key = "velocitypulse_demo"
 
+os.makedirs("static/reports/graphs", exist_ok=True)
+
 UPLOAD_FOLDER = "uploads"
 HISTORY_FILE = "static/reports/history.json"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -46,27 +48,32 @@ def home():
 def upload():
     uploaded_file = None
     uploaded_file_path = None
+    transactions = []
 
     if request.method == "POST":
-        if "file" in request.files:
-            file = request.files["file"]
-            if file.filename:
-                filename = secure_filename(file.filename)
-                file_path = os.path.join(UPLOAD_FOLDER, filename)
-                file.save(file_path)
-                uploaded_file = filename
-                uploaded_file_path = file_path
+        try:
+            if "file" in request.files:
+                file = request.files["file"]
+                if file.filename:
+                    filename = secure_filename(file.filename)
+                    file_path = os.path.join(UPLOAD_FOLDER, filename)
+                    file.save(file_path)
+                    uploaded_file = filename
+                    uploaded_file_path = file_path
 
-    transactions = []
-    if uploaded_file_path:
-        green, amber, rag_basis = 2.0, 5.0, "avg"
-        summary, test_rag = parse_jmeter_csv(uploaded_file_path, green, amber, rag_basis)
-        transactions = [row.get("Transaction") for row in summary if row.get("Transaction")]
+                    # Attempt to parse the uploaded file
+                    green, amber, rag_basis = 2.0, 5.0, "avg"
+                    summary, test_rag = parse_jmeter_csv(file_path, green, amber, rag_basis)
+                    transactions = [row.get("Transaction") for row in summary if row.get("Transaction")]
+        except Exception as e:
+            print("Upload error:", e)
+            flash("⚠️ Failed to process uploaded file. Please check format and size.")
 
     return render_template("upload.html",
                            uploaded_file=uploaded_file,
                            uploaded_file_path=uploaded_file_path,
                            transactions=transactions)
+
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
