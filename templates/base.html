@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VelocityPulse Demo</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f4f6f8;
+    }
+    .navbar {
+      background-color: #2a5298;
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+    .navbar a {
+      color: white;
+      text-decoration: none;
+      margin-right: 20px;
+      font-weight: 500;
+    }
+    .navbar a:hover {
+      text-decoration: underline;
+    }
+    .content {
+      max-width: 1200px;
+      margin: 40px auto;
+      padding: 20px;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    }
+    .demo-banner {
+      background-color: #ffc107;
+      color: #000;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <header class="navbar">
+    <nav class="navbar">
+      <div class="nav-container">
+        <a href="{{ url_for('upload') }}" class="nav-link">🏠 Home</a>
+        <a href="{{ url_for('history') }}" class="nav-link">📄 Report History</a>
+        <span class="demo-banner">Demo Mode – Restricted Features</span>
+      </div>
+    </nav>
+  </header>
+
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
