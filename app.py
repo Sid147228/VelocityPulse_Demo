@@ -1,13 +1,13 @@
-from generate_graphs import generate_graphs
+import os
+os.environ["MPLCONFIGDIR"] = "/tmp"  # Ensure Matplotlib uses writable config path
+
 from flask import Flask, render_template, request, redirect, url_for, flash
-import os, json
+import json
 import pandas as pd
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
 # Helpers
-import os
-os.environ["MPLCONFIGDIR"] = "/tmp"
 from jmeter_parser import parse_jmeter_csv
 from generate_TestResult import evaluate_sla
 from generate_graphs import generate_graphs
@@ -17,13 +17,12 @@ from generate_rag_pie import generate_rag_pie
 app = Flask(__name__)
 app.secret_key = "velocitypulse_demo"
 
-os.makedirs("static/reports/graphs", exist_ok=True)
-
+# Writable paths for Vercel
 UPLOAD_FOLDER = "/tmp/uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 HISTORY_FILE = "/tmp/history.json"
+GRAPH_FOLDER = "/tmp"
+
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs("static/reports", exist_ok=True)
 
 # --- History helpers ---
 def load_history():
@@ -76,7 +75,6 @@ def upload():
                            uploaded_file_path=uploaded_file_path,
                            transactions=transactions)
 
-
 @app.route("/analyze", methods=["POST"])
 def analyze():
     file_path = request.form["file_path"]
@@ -93,7 +91,6 @@ def analyze():
     df['timeStamp'] = pd.to_numeric(df['timeStamp'], errors='coerce').fillna(0).astype(int)
 
     if not df.empty:
-        # Convert timestamp to datetime
         df['timestamp'] = pd.to_datetime(df['timeStamp'], unit="ms", errors="coerce")
         df['elapsed'] = pd.to_numeric(df['elapsed'], errors="coerce")
         df['success'] = df['success'].astype(str).str.lower().isin(["true", "1"])
@@ -157,13 +154,12 @@ def analyze():
 
     try:
         generate_graphs(df, green_sla=green, amber_sla=amber)
-        generate_transaction_progress(df, out_file="static/reports/graphs/transaction_progress.png")
-        generate_rag_pie(summary, out_file="static/reports/graphs/rag_pie.png")
+        generate_transaction_progress(df, out_file=os.path.join(GRAPH_FOLDER, "transaction_progress.png"))
+        generate_rag_pie(summary, out_file=os.path.join(GRAPH_FOLDER, "rag_pie.png"))
     except Exception as e:
         print("Graph generation failed:", e)
 
     return redirect(url_for("report", report_index=0))
-
 
 @app.route("/report/<int:report_index>")
 def report(report_index):
@@ -182,10 +178,6 @@ def history():
 @app.route("/about")
 def about():
     return render_template("about.html", version="Demo", build="Demo", codename="Restricted")
-
-# --- Disabled routes ---
-# compare, trend, baseline, run_test, live_progress, monitor, export_report_pdf, etc.
-# These are intentionally omitted in demo mode.
 
 if __name__ == "__main__":
     app.run(debug=True)
