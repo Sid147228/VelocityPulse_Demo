@@ -14,6 +14,7 @@ def generate_graphs(df, green_sla=None, amber_sla=None, out_dir="static/reports/
 
     df.columns = [c.strip() for c in df.columns]
 
+    # Normalize timestamp
     if 'timeStamp' in df.columns and 'timestamp' not in df.columns:
         df['timeStamp'] = pd.to_numeric(df['timeStamp'], errors='coerce')
         df['timestamp'] = pd.to_datetime(df['timeStamp'], unit='ms', errors='coerce')
@@ -23,17 +24,19 @@ def generate_graphs(df, green_sla=None, amber_sla=None, out_dir="static/reports/
     else:
         df['timestamp'] = pd.NaT
 
+    # Normalize elapsed
     if 'elapsed' in df.columns:
         df['elapsed'] = pd.to_numeric(df['elapsed'], errors='coerce')
     else:
         df['elapsed'] = pd.NA
 
+    # Normalize success
     if 'success' in df.columns:
         df['success'] = df['success'].astype(str).str.lower().isin(['true', '1'])
     else:
         df['success'] = True
 
-    # Response Time Distribution
+    # 📈 Response Time Distribution
     if 'elapsed' in df.columns and not df['elapsed'].dropna().empty:
         plt.figure(figsize=(8, 4))
         sns.histplot(df['elapsed'].dropna(), bins=30, kde=True, color='steelblue')
@@ -50,7 +53,7 @@ def generate_graphs(df, green_sla=None, amber_sla=None, out_dir="static/reports/
         plt.savefig(f'{out_dir}/response_distribution.png')
         plt.close()
 
-    # Error Trend
+    # 📉 Error Trend
     if 'timestamp' in df.columns and not df['timestamp'].isna().all():
         error_df = df.groupby(df['timestamp'].dt.floor('min'))['success'] \
                      .apply(lambda x: 100.0 * (1.0 - x.sum() / len(x)))
@@ -64,19 +67,19 @@ def generate_graphs(df, green_sla=None, amber_sla=None, out_dir="static/reports/
             plt.savefig(f'{out_dir}/error_trend.png')
             plt.close()
 
-    # SLA Heatmap (Option B: groupby + unstack with deduplication)
+    # 🔥 SLA Heatmap (robust fix with pivot + deduplication)
     if all(col in df.columns for col in ['label', 'elapsed', 'timestamp']) and not df['timestamp'].isna().all():
         df['label'] = df['label'].astype(str).str.strip()
-        heatmap_data = (
+        grouped = (
             df.groupby([df['label'], df['timestamp'].dt.floor('min')])['elapsed']
               .mean()
-              .unstack(fill_value=0)
+              .reset_index()
         )
+        heatmap_data = grouped.pivot(index='label', columns='timestamp', values='elapsed')
         if heatmap_data is not None and not heatmap_data.empty:
-            # Drop duplicate columns if any
             heatmap_data = heatmap_data.loc[:, ~heatmap_data.columns.duplicated()]
             plt.figure(figsize=(10, 6))
-            sns.heatmap(heatmap_data, cmap='coolwarm', linewidths=0.5)
+            sns.heatmap(heatmap_data.fillna(0), cmap='coolwarm', linewidths=0.5)
             plt.title('SLA Heatmap')
             plt.xlabel('Time')
             plt.ylabel('Transaction')
@@ -84,7 +87,7 @@ def generate_graphs(df, green_sla=None, amber_sla=None, out_dir="static/reports/
             plt.savefig(f'{out_dir}/sla_heatmap.png')
             plt.close()
 
-    # Threads Over Time
+    # 👥 Threads Over Time
     if 'threadName' in df.columns and 'timestamp' in df.columns and not df['timestamp'].isna().all():
         thread_counts = df.groupby(df['timestamp'].dt.floor('min'))['threadName'].nunique()
         if not thread_counts.empty:
