@@ -23,6 +23,7 @@ HISTORY_FILE = "/tmp/history.json"
 GRAPH_FOLDER = "/tmp"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(GRAPH_FOLDER, exist_ok=True)
 
 # --- History helpers ---
 def load_history():
@@ -153,7 +154,9 @@ def analyze():
     save_report(report_data)
 
     try:
-        generate_graphs(df, green_sla=green, amber_sla=amber)
+        # Ensure all graph outputs go to /tmp
+        generate_graphs(df, green_sla=green, amber_sla=amber,
+                        out_file=os.path.join(GRAPH_FOLDER, "response_distribution.png"))
         generate_transaction_progress(df, out_file=os.path.join(GRAPH_FOLDER, "transaction_progress.png"))
         generate_rag_pie(summary, out_file=os.path.join(GRAPH_FOLDER, "rag_pie.png"))
     except Exception as e:
