@@ -81,8 +81,9 @@ def upload():
 def analyze():
     file_path = request.form["file_path"]
     report_name = request.form["report_name"]
-    green, amber = float(request.form["green"]), float(request.form["amber"])
-    rag_basis = request.form["rag_basis"]
+    green = float(request.form.get("green", 2.0))
+    amber = float(request.form.get("amber", 5.0))
+    rag_basis = request.form.get("rag_basis", "avg")
 
     # Parse and evaluate SLA
     summary, test_rag = parse_jmeter_csv(file_path, green, amber, rag_basis)
@@ -149,8 +150,35 @@ def analyze():
         "series_p90_by_txn": series_p90_by_txn,
         "series_error_rate_by_txn": series_error_rate_by_txn,
         "series_throughput_over_time": series_throughput_over_time,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
+        # ✅ Persist user selections
+        "rag_basis": rag_basis,
+        "green_sla": green,
+        "amber_sla": amber,
     }
+
+# Defensive normalization for graph helpers
+df_graph = df.copy()
+df_graph.columns = [c.strip() for c in df_graph.columns]  # original casing expected by some helpers
+try:
+    report_data["graph_img"] = generate_graphs_base64(df_graph, green, amber)
+except Exception as e:
+    print("Graph generation failed (response distribution):", e)
+    report_data["graph_img"] = None
+
+try:
+    report_data["txn_progress_img"] = generate_transaction_progress_base64(df_graph)
+except Exception as e:
+    print("Graph generation failed (transaction progress):", e)
+    report_data["txn_progress_img"] = None
+
+try:
+    report_data["rag_pie_img"] = generate_rag_pie_base64(summary)
+except Exception as e:
+    print("Graph generation failed (RAG pie):", e)
+    report_data["rag_pie_img"] = None
+
+
 
     # --- Generate base64 graphs ---
     try:
@@ -193,6 +221,34 @@ def history():
 @app.route("/about")
 def about():
     return render_template("about.html", version="Demo", build="Demo", codename="Restricted")
+
+if not df.empty:
+    ts_min = df["timestamp"].min()
+    ts_max = df["timestamp"].max()
+    total_duration_sec = (ts_max - ts_min).total_seconds() if pd.notnull(ts_min) and pd.notnull(ts_max) else 0
+
+    # Throughput window labels already computed. Use min/max label for test period
+    test_period_str = f"{ts_min.strftime('%H:%M')}–{ts_max.strftime('%H:%M')}" if pd.notnull(ts_min) and pd.notnull(ts_max) else "N/A"
+    total_duration_str = f"{int(total_duration_sec)}s" if total_duration_sec > 0 else "N/A"
+
+    # Concurrent users from threadName, if present
+    if "threadname" in [c.lower() for c in df.columns]:
+        users_concurrent = df.groupby(df["timestamp"].dt.floor("min"))["threadName"].nunique().max()
+    else:
+        users_concurrent = None
+
+    # Simple steady-state heuristic: middle 50% duration if throughput variance is low
+    steady_state = "Yes" if len(series_throughput_over_time) > 3 and pd.Series(series_throughput_over_time).std() < 0.1 * max(series_throughput_over_time or [1]) else "No"
+
+else:
+    test_period_str, total_duration_str, users_concurrent, steady_state = "N/A", "N/A", None, "No"
+
+report_data.update({
+    "test_period": test_period_str,
+    "total_duration": total_duration_str,
+    "concurrent_users": users_concurrent if users_concurrent is not None else "N/A",
+    "steady_state": steady_state,
+})
 
 if __name__ == "__main__":
     app.run(debug=True)

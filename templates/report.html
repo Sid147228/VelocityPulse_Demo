@@ -33,6 +33,12 @@
       <span class="rag rag-green">GREEN</span>
     {% else %}
       <span class="rag">UNKNOWN</span>
+
+<div class="meta">
+  <div><strong>RAG basis:</strong> {{ rag_basis }}</div>
+  <div><strong>Green SLA:</strong> {{ green_sla }}s</div>
+  <div><strong>Amber SLA:</strong> {{ amber_sla }}s</div>
+</div>
     {% endif %}
   </p>
   <p><strong>Test date:</strong> {{ test_date or 'Not available' }}</p>
