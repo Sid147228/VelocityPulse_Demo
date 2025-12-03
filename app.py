@@ -1,3 +1,4 @@
+from generate_graphs import generate_graphs
 from flask import Flask, render_template, request, redirect, url_for, flash
 import os, json
 import pandas as pd
