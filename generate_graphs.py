@@ -67,15 +67,24 @@ def generate_graphs(df, green_sla=None, amber_sla=None, out_dir="static/reports/
             plt.savefig(f'{out_dir}/error_trend.png')
             plt.close()
 
-    # 🔥 SLA Heatmap (robust fix with pivot + deduplication)
+    # 🔥 SLA Heatmap (robust fix with pivot_table)
     if all(col in df.columns for col in ['label', 'elapsed', 'timestamp']) and not df['timestamp'].isna().all():
         df['label'] = df['label'].astype(str).str.strip()
+        df['minute'] = df['timestamp'].dt.floor('min')
+
         grouped = (
-            df.groupby([df['label'], df['timestamp'].dt.floor('min')])['elapsed']
+            df.groupby(['label', 'minute'])['elapsed']
               .mean()
               .reset_index()
         )
-        heatmap_data = grouped.pivot(index='label', columns='timestamp', values='elapsed')
+
+        heatmap_data = grouped.pivot_table(
+            index='label',
+            columns='minute',
+            values='elapsed',
+            aggfunc='mean'
+        )
+
         if heatmap_data is not None and not heatmap_data.empty:
             heatmap_data = heatmap_data.loc[:, ~heatmap_data.columns.duplicated()]
             plt.figure(figsize=(10, 6))
