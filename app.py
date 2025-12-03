@@ -124,10 +124,34 @@ def analyze():
 
         throughput_over_time = df.groupby(df["timestamp"].dt.floor("min")).size()
         series_throughput_over_time = [int(throughput_over_time.get(t, 0)) for t in time_labels]
+
+        # --- Derived metadata ---
+        ts_min = df["timestamp"].min()
+        ts_max = df["timestamp"].max()
+        total_duration_sec = (ts_max - ts_min).total_seconds() if pd.notnull(ts_min) and pd.notnull(ts_max) else 0
+        test_period_str = f"{ts_min.strftime('%H:%M')}–{ts_max.strftime('%H:%M')}" if pd.notnull(ts_min) and pd.notnull(ts_max) else "N/A"
+        total_duration_str = f"{int(total_duration_sec)}s" if total_duration_sec > 0 else "N/A"
+
+        # Concurrent users from threadName, if present
+        users_concurrent = None
+        cols_lower = [c.lower() for c in df.columns]
+        if "threadname" in cols_lower:
+            # original column could be 'threadName' or 'threadname'
+            thread_col = "threadName" if "threadName" in df.columns else "threadname"
+            users_concurrent = df.groupby(df["timestamp"].dt.floor("min"))[thread_col].nunique().max()
+
+        # Simple steady-state heuristic
+        if series_throughput_over_time:
+            throughput_series = pd.Series(series_throughput_over_time)
+            steady_state = "Yes" if throughput_series.std() < 0.1 * max(throughput_series.max(), 1) else "No"
+        else:
+            steady_state = "No"
+
     else:
         labels_fmt = []
         series_avg_by_txn, series_p90_by_txn, series_error_rate_by_txn = {}, {}, {}
         series_throughput_over_time = []
+        test_period_str, total_duration_str, users_concurrent, steady_state = "N/A", "N/A", None, "No"
 
     # --- Build report data ---
     report_data = {
@@ -136,10 +160,10 @@ def analyze():
         "summary": summary,
         "rag_result": test_rag,
         "test_date": datetime.utcnow().strftime("%d-%m-%Y"),
-        "test_period": "Demo mode",
-        "total_duration": "Demo mode",
-        "concurrent_users": "Demo mode",
-        "steady_state": "Demo mode",
+        "test_period": test_period_str,
+        "total_duration": total_duration_str,
+        "concurrent_users": users_concurrent if users_concurrent is not None else "N/A",
+        "steady_state": steady_state,
         "rag_counts": {
             "GREEN": sum(1 for r in summary if r.get("RAG") == "GREEN"),
             "AMBER": sum(1 for r in summary if r.get("RAG") == "AMBER"),
@@ -151,7 +175,7 @@ def analyze():
         "series_error_rate_by_txn": series_error_rate_by_txn,
         "series_throughput_over_time": series_throughput_over_time,
         "timestamp": datetime.utcnow().isoformat(),
-        # ✅ Persist user selections
+        # Persist user selections
         "rag_basis": rag_basis,
         "green_sla": green,
         "amber_sla": amber,
@@ -201,34 +225,6 @@ def history():
 @app.route("/about")
 def about():
     return render_template("about.html", version="Demo", build="Demo", codename="Restricted")
-
-if not df.empty:
-    ts_min = df["timestamp"].min()
-    ts_max = df["timestamp"].max()
-    total_duration_sec = (ts_max - ts_min).total_seconds() if pd.notnull(ts_min) and pd.notnull(ts_max) else 0
-
-    # Throughput window labels already computed. Use min/max label for test period
-    test_period_str = f"{ts_min.strftime('%H:%M')}–{ts_max.strftime('%H:%M')}" if pd.notnull(ts_min) and pd.notnull(ts_max) else "N/A"
-    total_duration_str = f"{int(total_duration_sec)}s" if total_duration_sec > 0 else "N/A"
-
-    # Concurrent users from threadName, if present
-    if "threadname" in [c.lower() for c in df.columns]:
-        users_concurrent = df.groupby(df["timestamp"].dt.floor("min"))["threadName"].nunique().max()
-    else:
-        users_concurrent = None
-
-    # Simple steady-state heuristic: middle 50% duration if throughput variance is low
-    steady_state = "Yes" if len(series_throughput_over_time) > 3 and pd.Series(series_throughput_over_time).std() < 0.1 * max(series_throughput_over_time or [1]) else "No"
-
-else:
-    test_period_str, total_duration_str, users_concurrent, steady_state = "N/A", "N/A", None, "No"
-
-report_data.update({
-    "test_period": test_period_str,
-    "total_duration": total_duration_str,
-    "concurrent_users": users_concurrent if users_concurrent is not None else "N/A",
-    "steady_state": steady_state,
-})
 
 if __name__ == "__main__":
     app.run(debug=True)
