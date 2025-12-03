@@ -1,5 +1,6 @@
 flask
-pandas
-numpy
 jinja2
 werkzeug
+pandas
+numpy
+matplotlib
