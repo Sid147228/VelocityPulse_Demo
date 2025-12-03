@@ -64,14 +64,17 @@ def generate_graphs(df, green_sla=None, amber_sla=None, out_dir="static/reports/
             plt.savefig(f'{out_dir}/error_trend.png')
             plt.close()
 
-    # SLA Heatmap (Option B: groupby + unstack)
+    # SLA Heatmap (Option B: groupby + unstack with deduplication)
     if all(col in df.columns for col in ['label', 'elapsed', 'timestamp']) and not df['timestamp'].isna().all():
+        df['label'] = df['label'].astype(str).str.strip()
         heatmap_data = (
             df.groupby([df['label'], df['timestamp'].dt.floor('min')])['elapsed']
               .mean()
               .unstack(fill_value=0)
         )
         if heatmap_data is not None and not heatmap_data.empty:
+            # Drop duplicate columns if any
+            heatmap_data = heatmap_data.loc[:, ~heatmap_data.columns.duplicated()]
             plt.figure(figsize=(10, 6))
             sns.heatmap(heatmap_data, cmap='coolwarm', linewidths=0.5)
             plt.title('SLA Heatmap')
