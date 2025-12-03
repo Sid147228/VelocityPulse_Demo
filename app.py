@@ -21,7 +21,7 @@ os.makedirs("static/reports/graphs", exist_ok=True)
 
 UPLOAD_FOLDER = "/tmp/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-HISTORY_FILE = "static/reports/history.json"
+HISTORY_FILE = "/tmp/history.json"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs("static/reports", exist_ok=True)
 
