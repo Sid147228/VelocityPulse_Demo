@@ -25,10 +25,26 @@ def generate_transaction_progress(df, out_file="static/reports/graphs/transactio
         if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
             df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
 
-        plt.figure(figsize=(8,4))
-        grouped = df.groupby([df["timestamp"].dt.floor("min"), df["label"]]).size().unstack(fill_value=0)
-        if not grouped.empty:
-            grouped.plot(ax=plt.gca())
+        df["minute"] = df["timestamp"].dt.floor("min")
+
+        # Aggregate safely and enforce uniqueness
+        grouped = (
+            df.groupby(["minute", "label"]).size()
+              .reset_index(name="count")
+              .drop_duplicates(subset=["minute", "label"])
+        )
+
+        pivot = grouped.pivot_table(
+            index="minute",
+            columns="label",
+            values="count",
+            aggfunc="sum",
+            fill_value=0
+        )
+
+        if not pivot.empty:
+            plt.figure(figsize=(8,4))
+            pivot.plot(ax=plt.gca())
             plt.title("Transaction Progress Over Time")
             plt.xlabel("Time")
             plt.ylabel("Count")
@@ -57,10 +73,26 @@ def generate_transaction_progress_base64(df):
         if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
             df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
 
-        plt.figure(figsize=(8,4))
-        grouped = df.groupby([df["timestamp"].dt.floor("min"), df["label"]]).size().unstack(fill_value=0)
-        if not grouped.empty:
-            grouped.plot(ax=plt.gca())
+        df["minute"] = df["timestamp"].dt.floor("min")
+
+        # Aggregate safely and enforce uniqueness
+        grouped = (
+            df.groupby(["minute", "label"]).size()
+              .reset_index(name="count")
+              .drop_duplicates(subset=["minute", "label"])
+        )
+
+        pivot = grouped.pivot_table(
+            index="minute",
+            columns="label",
+            values="count",
+            aggfunc="sum",
+            fill_value=0
+        )
+
+        if not pivot.empty:
+            plt.figure(figsize=(8,4))
+            pivot.plot(ax=plt.gca())
             plt.title("Transaction Progress Over Time")
             plt.xlabel("Time")
             plt.ylabel("Count")
