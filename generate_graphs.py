@@ -67,7 +67,7 @@ def generate_graphs(df, green_sla=None, amber_sla=None, out_dir="static/reports/
             plt.savefig(f'{out_dir}/error_trend.png')
             plt.close()
 
-    # 🔥 SLA Heatmap (robust fix with pivot_table)
+    # 🔥 SLA Heatmap (robust fix with pivot_table + drop_duplicates)
     if all(col in df.columns for col in ['label', 'elapsed', 'timestamp']) and not df['timestamp'].isna().all():
         df['label'] = df['label'].astype(str).str.strip()
         df['minute'] = df['timestamp'].dt.floor('min')
@@ -76,25 +76,22 @@ def generate_graphs(df, green_sla=None, amber_sla=None, out_dir="static/reports/
             df.groupby(['label', 'minute'])['elapsed']
               .mean()
               .reset_index()
+              .drop_duplicates(subset=['label', 'minute'])   # <-- enforce uniqueness
         )
 
-        heatmap_data = grouped.pivot_table(
-            index='label',
-            columns='minute',
-            values='elapsed',
-            aggfunc='mean'
-        )
-
-        if heatmap_data is not None and not heatmap_data.empty:
-            heatmap_data = heatmap_data.loc[:, ~heatmap_data.columns.duplicated()]
-            plt.figure(figsize=(10, 6))
-            sns.heatmap(heatmap_data.fillna(0), cmap='coolwarm', linewidths=0.5)
-            plt.title('SLA Heatmap')
-            plt.xlabel('Time')
-            plt.ylabel('Transaction')
-            plt.tight_layout()
-            plt.savefig(f'{out_dir}/sla_heatmap.png')
-            plt.close()
+        try:
+            heatmap_data = grouped.pivot(index='label', columns='minute', values='elapsed')
+            if heatmap_data is not None and not heatmap_data.empty:
+                plt.figure(figsize=(10, 6))
+                sns.heatmap(heatmap_data.fillna(0), cmap='coolwarm', linewidths=0.5)
+                plt.title('SLA Heatmap')
+                plt.xlabel('Time')
+                plt.ylabel('Transaction')
+                plt.tight_layout()
+                plt.savefig(f'{out_dir}/sla_heatmap.png')
+                plt.close()
+        except Exception as e:
+            print("⚠ SLA heatmap generation failed:", e)
 
     # 👥 Threads Over Time
     if 'threadName' in df.columns and 'timestamp' in df.columns and not df['timestamp'].isna().all():
