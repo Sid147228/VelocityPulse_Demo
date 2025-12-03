@@ -70,26 +70,10 @@
         {% for row in summary %}
         <tr>
           <td>{{ row.get("Transaction") }}</td>
-          <td>
-            {% if row.get("Avg (s)") is not none %}
-              {{ "%.2f"|format(row.get("Avg (s)")|float) }}
-            {% else %}—{% endif %}
-          </td>
-          <td>
-            {% if row.get("90th % (s)") is not none %}
-              {{ "%.2f"|format(row.get("90th % (s)")|float) }}
-            {% else %}—{% endif %}
-          </td>
-          <td>
-            {% if row.get("95th % (s)") is not none %}
-              {{ "%.2f"|format(row.get("95th % (s)")|float) }}
-            {% else %}—{% endif %}
-          </td>
-          <td>
-            {% if row.get("Error %") is not none %}
-              {{ "%.2f"|format(row.get("Error %")|float) }}
-            {% else %}—{% endif %}
-          </td>
+          <td>{% if row.get("Avg (s)") is not none %}{{ "%.2f"|format(row.get("Avg (s)")|float) }}{% else %}—{% endif %}</td>
+          <td>{% if row.get("90th % (s)") is not none %}{{ "%.2f"|format(row.get("90th % (s)")|float) }}{% else %}—{% endif %}</td>
+          <td>{% if row.get("95th % (s)") is not none %}{{ "%.2f"|format(row.get("95th % (s)")|float) }}{% else %}—{% endif %}</td>
+          <td>{% if row.get("Error %") is not none %}{{ "%.2f"|format(row.get("Error %")|float) }}{% else %}—{% endif %}</td>
           <td>
             {% if row.get("RAG") == 'RED' %}
               <span class="rag rag-red">RED</span>
@@ -114,36 +98,7 @@
   {% if total_rag == 0 %}
     <div class="alert">No RAG data available.</div>
   {% else %}
-    {% if is_pdf %}
-      <img src="{{ url_for('static', filename='reports/graphs/rag_pie.png', _external=True) }}" 
-           alt="RAG distribution">
-    {% else %}
-      <canvas id="ragPieChart" width="300" height="300" style="max-width:300px;max-height:300px;"></canvas>
-      <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-      <script>
-        (function() {
-          const ctx = document.getElementById('ragPieChart');
-          if (!ctx) return;
-          const data = {{ rag_counts|tojson }};
-          new Chart(ctx, {
-            type: 'pie',
-            data: {
-              labels: ['GREEN','AMBER','RED'],
-              datasets: [{
-                data: [data.GREEN || 0, data.AMBER || 0, data.RED || 0],
-                backgroundColor: ['#28a745','#ffc107','#dc3545']
-              }]
-            },
-            options: {
-              plugins: {
-                title: { display: true, text: 'RAG distribution' },
-                legend: { position: 'bottom' }
-              }
-            }
-          });
-        })();
-      </script>
-    {% endif %}
+    <img src="data:image/png;base64,{{ rag_pie_img }}" alt="RAG distribution">
   {% endif %}
 </div>
 
@@ -153,24 +108,13 @@
     <div class="alert">
       <strong>Note:</strong> No time-series data available for graphs. Showing static fallbacks.
     </div>
-    <img src="{{ url_for('static', filename='reports/graphs/response_distribution.png') }}" alt="Response Time Distribution">
-    <img src="{{ url_for('static', filename='reports/graphs/error_trend.png') }}" alt="Error Trend Over Time">
-    <img src="{{ url_for('static', filename='reports/graphs/sla_heatmap.png') }}" alt="SLA Heatmap">
-    <img src="{{ url_for('static', filename='reports/graphs/threads_over_time.png') }}" alt="Threads Over Time">
-    <img src="{{ url_for('static', filename='reports/graphs/transaction_progress.png') }}" alt="Transaction Progress">
+    <img src="data:image/png;base64,{{ graph_img }}" alt="Response Time Distribution">
+    <img src="data:image/png;base64,{{ txn_progress_img }}" alt="Transaction Progress">
   {% else %}
-    {% if is_pdf %}
-      <img src="{{ url_for('static', filename='reports/graphs/response_distribution.png', _external=True) }}" alt="Response Time Distribution">
-      <img src="{{ url_for('static', filename='reports/graphs/error_trend.png', _external=True) }}" alt="Error Trend Over Time">
-      <img src="{{ url_for('static', filename='reports/graphs/sla_heatmap.png', _external=True) }}" alt="SLA Heatmap">
-      <img src="{{ url_for('static', filename='reports/graphs/threads_over_time.png', _external=True) }}" alt="Threads Over Time">
-      <img src="{{ url_for('static', filename='reports/graphs/transaction_progress.png', _external=True) }}" alt="Transaction Progress">
-    {% else %}
-      <canvas id="avgByTxnChart"></canvas>
-      <canvas id="p90ByTxnChart"></canvas>
-      <canvas id="errorRateChart"></canvas>
-            <canvas id="throughputChart"></canvas>
-    {% endif %}
+    <canvas id="avgByTxnChart"></canvas>
+    <canvas id="p90ByTxnChart"></canvas>
+    <canvas id="errorRateChart"></canvas>
+    <canvas id="throughputChart"></canvas>
   {% endif %}
 </div>
 
@@ -219,15 +163,29 @@
       options: { plugins: { title: { display: true, text: 'Error rate (%) by transaction' } } }
     });
 
-    new Chart(document.getElementById('throughputChart'), {
+        new Chart(document.getElementById('throughputChart'), {
       type: 'line',
-      data: { labels: timeLabels, datasets: [
-        { label: 'Throughput (requests/min)', data: throughput, borderColor: '#2a5298', fill: true }
-      ]},
-      options: { plugins: { title: { display: true, text: 'Throughput over time' } } }
+      data: { 
+        labels: timeLabels, 
+        datasets: [
+          { 
+            label: 'Throughput (requests/min)', 
+            data: throughput, 
+            borderColor: '#2a5298', 
+            backgroundColor: '#2a5298', 
+            fill: true, 
+            tension: 0.2 
+          }
+        ] 
+      },
+      options: { 
+        plugins: { 
+          title: { display: true, text: 'Throughput over time' }, 
+          legend: { position: 'bottom' } 
+        } 
+      }
     });
   }
 </script>
 {% endif %}
 {% endblock %}
-
