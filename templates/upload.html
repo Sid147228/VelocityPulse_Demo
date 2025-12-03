@@ -7,7 +7,17 @@
 <form method="POST" enctype="multipart/form-data" action="{{ url_for('upload') }}">
   <label>CSV File:</label>
   <input type="file" name="file" accept=".csv,.jtl" required />
+  <p style="font-size:0.9em; color:#666; margin-top:8px;">
+    ⚠️ Only .csv or .jtl files under 2MB are accepted.
+  </p>
   <button type="submit">Upload</button>
+
+  <!-- Demo banner below upload button -->
+  <div style="text-align:center; margin-top:20px;">
+    <span style="background-color:#ffc107; color:#000; padding:6px 12px; border-radius:4px; font-weight:bold;">
+      Demo Mode – Restricted Features
+    </span>
+  </div>
 </form>
 
 {% if uploaded_file %}
