@@ -4,3 +4,5 @@ werkzeug
 pandas
 numpy
 matplotlib
+seaborn
+psutil

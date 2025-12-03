@@ -5,6 +5,8 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 
 # Helpers
+import os
+os.environ["MPLCONFIGDIR"] = "/tmp"
 from jmeter_parser import parse_jmeter_csv
 from generate_TestResult import evaluate_sla
 from generate_graphs import generate_graphs
