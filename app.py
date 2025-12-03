@@ -157,38 +157,18 @@ def analyze():
         "amber_sla": amber,
     }
 
-# Defensive normalization for graph helpers
-df_graph = df.copy()
-df_graph.columns = [c.strip() for c in df_graph.columns]  # original casing expected by some helpers
-try:
-    report_data["graph_img"] = generate_graphs_base64(df_graph, green, amber)
-except Exception as e:
-    print("Graph generation failed (response distribution):", e)
-    report_data["graph_img"] = None
-
-try:
-    report_data["txn_progress_img"] = generate_transaction_progress_base64(df_graph)
-except Exception as e:
-    print("Graph generation failed (transaction progress):", e)
-    report_data["txn_progress_img"] = None
-
-try:
-    report_data["rag_pie_img"] = generate_rag_pie_base64(summary)
-except Exception as e:
-    print("Graph generation failed (RAG pie):", e)
-    report_data["rag_pie_img"] = None
-
-
-
     # --- Generate base64 graphs ---
+    df_graph = df.copy()
+    df_graph.columns = [c.strip() for c in df_graph.columns]  # normalize for helpers
+
     try:
-        report_data["graph_img"] = generate_graphs_base64(df, green, amber)
+        report_data["graph_img"] = generate_graphs_base64(df_graph, green, amber)
     except Exception as e:
         print("Graph generation failed (response distribution):", e)
         report_data["graph_img"] = None
 
     try:
-        report_data["txn_progress_img"] = generate_transaction_progress_base64(df)
+        report_data["txn_progress_img"] = generate_transaction_progress_base64(df_graph)
     except Exception as e:
         print("Graph generation failed (transaction progress):", e)
         report_data["txn_progress_img"] = None
