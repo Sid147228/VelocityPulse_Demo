@@ -84,23 +84,22 @@ def analyze():
     green = float(request.form.get("green", 2.0))
     amber = float(request.form.get("amber", 5.0))
     rag_basis = request.form.get("rag_basis", "avg")
-    metrics = request.form.getlist("metrics")  # e.g. ["avg","p90","p95","samples"]
+    metrics = request.form.getlist("metrics")  # e.g. ["avg","p90","p95","samples","error"]
 
     # Parse and evaluate SLA
     summary, test_rag = parse_jmeter_csv(file_path, green, amber, rag_basis)
     summary, test_rag = evaluate_sla(summary, green, amber, rag_basis)
 
-    # --- Build time-series data for Chart.js ---
+    # --- Build time-series data ---
     df = pd.read_csv(file_path)
     df.columns = [c.strip().lower() for c in df.columns]
-    df['timestamp'] = pd.to_datetime(pd.to_numeric(df.get('timestamp', df.get('timeStamp')), errors='coerce'),
+    df['timestamp'] = pd.to_datetime(pd.to_numeric(df.get('timestamp', df.get('timestamp')), errors='coerce'),
                                      unit="ms", errors="coerce")
     df['elapsed'] = pd.to_numeric(df.get('elapsed'), errors="coerce")
     if 'success' in df.columns:
         df['success'] = df['success'].astype(str).str.lower().isin(["true", "1"])
     else:
         df['success'] = True
-
     df = df.dropna(subset=["timestamp"]).sort_values("timestamp")
 
     if not df.empty:
@@ -132,9 +131,7 @@ def analyze():
         throughput_over_time = df.groupby(df["timestamp"].dt.floor("min")).size()
         series_throughput_over_time = [int(throughput_over_time.get(t, 0)) for t in time_labels]
 
-        # --- Derived metadata ---
-        ts_min = df["timestamp"].min()
-        ts_max = df["timestamp"].max()
+        ts_min, ts_max = df["timestamp"].min(), df["timestamp"].max()
         total_duration_sec = (ts_max - ts_min).total_seconds() if pd.notnull(ts_min) and pd.notnull(ts_max) else 0
         test_period_str = f"{ts_min.strftime('%H:%M')}–{ts_max.strftime('%H:%M')}" if pd.notnull(ts_min) and pd.notnull(ts_max) else "N/A"
         total_duration_str = f"{int(total_duration_sec)}s" if total_duration_sec > 0 else "N/A"
@@ -143,11 +140,7 @@ def analyze():
         if "threadname" in df.columns:
             users_concurrent = df.groupby(df["timestamp"].dt.floor("min"))["threadname"].nunique().max()
 
-        if series_throughput_over_time:
-            throughput_series = pd.Series(series_throughput_over_time)
-            steady_state = "Yes" if throughput_series.std() < 0.1 * max(throughput_series.max(), 1) else "No"
-        else:
-            steady_state = "No"
+        steady_state = "Yes" if series_throughput_over_time and pd.Series(series_throughput_over_time).std() < 0.1 * max(series_throughput_over_time) else "No"
     else:
         labels_fmt, series_by_txn, series_throughput_over_time = [], {}, []
         test_period_str, total_duration_str, users_concurrent, steady_state = "N/A", "N/A", None, "No"
