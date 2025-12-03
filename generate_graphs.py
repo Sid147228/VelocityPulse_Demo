@@ -64,17 +64,16 @@ def generate_graphs(df, green_sla=None, amber_sla=None, out_dir="static/reports/
             plt.savefig(f'{out_dir}/error_trend.png')
             plt.close()
 
-    # SLA Heatmap
+    # SLA Heatmap (Option B: groupby + unstack)
     if all(col in df.columns for col in ['label', 'elapsed', 'timestamp']) and not df['timestamp'].isna().all():
-        heatmap_data = df.pivot_table(
-            index='label',
-            columns=df['timestamp'].dt.floor('min'),
-            values='elapsed',
-            aggfunc='mean'
+        heatmap_data = (
+            df.groupby([df['label'], df['timestamp'].dt.floor('min')])['elapsed']
+              .mean()
+              .unstack(fill_value=0)
         )
         if heatmap_data is not None and not heatmap_data.empty:
             plt.figure(figsize=(10, 6))
-            sns.heatmap(heatmap_data.fillna(0), cmap='coolwarm', linewidths=0.5)
+            sns.heatmap(heatmap_data, cmap='coolwarm', linewidths=0.5)
             plt.title('SLA Heatmap')
             plt.xlabel('Time')
             plt.ylabel('Transaction')
