@@ -204,10 +204,10 @@ def analyze():
         report_data["rag_pie_img"] = None
 
     # --- Save report metadata ---
-save_report(report_data)
+    save_report(report_data)
 
-# Instead of redirecting to /report/0, render directly:
-return render_template("report.html", report_index=0, **report_data)
+    # ✅ This return must be indented inside the function
+    return render_template("report.html", report_index=0, **report_data)
 
 
 @app.route("/report/<int:report_index>")
