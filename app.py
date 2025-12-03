@@ -10,9 +10,9 @@ from werkzeug.utils import secure_filename
 # Helpers
 from jmeter_parser import parse_jmeter_csv
 from generate_TestResult import evaluate_sla
-from generate_graphs import generate_graphs
-from generate_transaction_progress import generate_transaction_progress
-from generate_rag_pie import generate_rag_pie
+from generate_graphs import generate_graphs_base64   # <-- updated
+from generate_transaction_progress import generate_transaction_progress_base64  # <-- updated
+from generate_rag_pie import generate_rag_pie_base64  # <-- updated
 
 app = Flask(__name__)
 app.secret_key = "velocitypulse_demo"
@@ -20,10 +20,8 @@ app.secret_key = "velocitypulse_demo"
 # Writable paths for Vercel
 UPLOAD_FOLDER = "/tmp/uploads"
 HISTORY_FILE = "/tmp/history.json"
-GRAPH_FOLDER = "/tmp"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(GRAPH_FOLDER, exist_ok=True)
 
 # --- History helpers ---
 def load_history():
@@ -151,17 +149,15 @@ def analyze():
         "timestamp": datetime.utcnow().isoformat()
     }
 
-    save_report(report_data)
-
     try:
-        # Ensure all graph outputs go to /tmp
-        generate_graphs(df, green_sla=green, amber_sla=amber,
-                        out_file=os.path.join(GRAPH_FOLDER, "response_distribution.png"))
-        generate_transaction_progress(df, out_file=os.path.join(GRAPH_FOLDER, "transaction_progress.png"))
-        generate_rag_pie(summary, out_file=os.path.join(GRAPH_FOLDER, "rag_pie.png"))
+        # Generate base64 graphs instead of saving files
+        report_data["graph_img"] = generate_graphs_base64(df, green, amber)
+        report_data["txn_progress_img"] = generate_transaction_progress_base64(df)
+        report_data["rag_pie_img"] = generate_rag_pie_base64(summary)
     except Exception as e:
         print("Graph generation failed:", e)
 
+    save_report(report_data)
     return redirect(url_for("report", report_index=0))
 
 @app.route("/report/<int:report_index>")
