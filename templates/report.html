@@ -193,5 +193,15 @@
     });
   }
 </script>
+
+{% for txn, metrics in series_by_txn.items() %}
+  <h3>{{ txn }}</h3>
+  <ul>
+    {% for metric, values in metrics.items() %}
+      <li>{{ metric }}: {{ values }}</li>
+    {% endfor %}
+  </ul>
+{% endfor %}
+
 {% endif %}
 {% endblock %}

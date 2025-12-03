@@ -84,6 +84,7 @@ def analyze():
     green = float(request.form.get("green", 2.0))
     amber = float(request.form.get("amber", 5.0))
     rag_basis = request.form.get("rag_basis", "avg")
+    metrics = request.form.getlist("metrics")  # e.g. ["avg","p90","p95","samples"]
 
     # Parse and evaluate SLA
     summary, test_rag = parse_jmeter_csv(file_path, green, amber, rag_basis)
@@ -91,36 +92,42 @@ def analyze():
 
     # --- Build time-series data for Chart.js ---
     df = pd.read_csv(file_path)
-    df['timeStamp'] = pd.to_numeric(df['timeStamp'], errors='coerce').fillna(0).astype(int)
+    df.columns = [c.strip().lower() for c in df.columns]
+    df['timestamp'] = pd.to_datetime(pd.to_numeric(df.get('timestamp', df.get('timeStamp')), errors='coerce'),
+                                     unit="ms", errors="coerce")
+    df['elapsed'] = pd.to_numeric(df.get('elapsed'), errors="coerce")
+    if 'success' in df.columns:
+        df['success'] = df['success'].astype(str).str.lower().isin(["true", "1"])
+    else:
+        df['success'] = True
+
+    df = df.dropna(subset=["timestamp"]).sort_values("timestamp")
 
     if not df.empty:
-        df['timestamp'] = pd.to_datetime(df['timeStamp'], unit="ms", errors="coerce")
-        df['elapsed'] = pd.to_numeric(df['elapsed'], errors="coerce")
-        df['success'] = df['success'].astype(str).str.lower().isin(["true", "1"])
-        df = df.dropna(subset=["timestamp"]).sort_values("timestamp")
-
         time_index = df["timestamp"].dt.floor("min")
         time_labels = sorted(time_index.dropna().unique())
         labels_fmt = [ts.strftime("%H:%M") for ts in time_labels]
 
-        series_avg_by_txn, series_p90_by_txn, series_error_rate_by_txn = {}, {}, {}
+        series_by_txn = {}
         for txn, g in df.groupby("label"):
             gb = g.groupby(g["timestamp"].dt.floor("min"))
-            avg_ms = gb["elapsed"].mean()
-            p90_ms = gb["elapsed"].quantile(0.90)
-            err_pct = gb.apply(lambda x: 100.0 * ((~x["success"]).sum() / len(x)))
-            series_avg_by_txn[txn] = [
-                round(avg_ms.get(t, None)/1000.0, 3) if pd.notnull(avg_ms.get(t, None)) else None
-                for t in time_labels
-            ]
-            series_p90_by_txn[txn] = [
-                round(p90_ms.get(t, None)/1000.0, 3) if pd.notnull(p90_ms.get(t, None)) else None
-                for t in time_labels
-            ]
-            series_error_rate_by_txn[txn] = [
-                round(err_pct.get(t, None), 3) if pd.notnull(err_pct.get(t, None)) else None
-                for t in time_labels
-            ]
+            txn_series = {}
+            if "avg" in metrics:
+                avg_ms = gb["elapsed"].mean()
+                txn_series["avg"] = [round(avg_ms.get(t, None)/1000.0, 3) if pd.notnull(avg_ms.get(t, None)) else None for t in time_labels]
+            if "p90" in metrics:
+                p90_ms = gb["elapsed"].quantile(0.90)
+                txn_series["p90"] = [round(p90_ms.get(t, None)/1000.0, 3) if pd.notnull(p90_ms.get(t, None)) else None for t in time_labels]
+            if "p95" in metrics:
+                p95_ms = gb["elapsed"].quantile(0.95)
+                txn_series["p95"] = [round(p95_ms.get(t, None)/1000.0, 3) if pd.notnull(p95_ms.get(t, None)) else None for t in time_labels]
+            if "samples" in metrics:
+                samples = gb.size()
+                txn_series["samples"] = [int(samples.get(t, 0)) for t in time_labels]
+            if "error" in metrics:
+                err_pct = gb.apply(lambda x: 100.0 * ((~x["success"]).sum() / len(x)))
+                txn_series["error"] = [round(err_pct.get(t, None), 3) if pd.notnull(err_pct.get(t, None)) else None for t in time_labels]
+            series_by_txn[txn] = txn_series
 
         throughput_over_time = df.groupby(df["timestamp"].dt.floor("min")).size()
         series_throughput_over_time = [int(throughput_over_time.get(t, 0)) for t in time_labels]
@@ -132,25 +139,17 @@ def analyze():
         test_period_str = f"{ts_min.strftime('%H:%M')}–{ts_max.strftime('%H:%M')}" if pd.notnull(ts_min) and pd.notnull(ts_max) else "N/A"
         total_duration_str = f"{int(total_duration_sec)}s" if total_duration_sec > 0 else "N/A"
 
-        # Concurrent users from threadName, if present
         users_concurrent = None
-        cols_lower = [c.lower() for c in df.columns]
-        if "threadname" in cols_lower:
-            # original column could be 'threadName' or 'threadname'
-            thread_col = "threadName" if "threadName" in df.columns else "threadname"
-            users_concurrent = df.groupby(df["timestamp"].dt.floor("min"))[thread_col].nunique().max()
+        if "threadname" in df.columns:
+            users_concurrent = df.groupby(df["timestamp"].dt.floor("min"))["threadname"].nunique().max()
 
-        # Simple steady-state heuristic
         if series_throughput_over_time:
             throughput_series = pd.Series(series_throughput_over_time)
             steady_state = "Yes" if throughput_series.std() < 0.1 * max(throughput_series.max(), 1) else "No"
         else:
             steady_state = "No"
-
     else:
-        labels_fmt = []
-        series_avg_by_txn, series_p90_by_txn, series_error_rate_by_txn = {}, {}, {}
-        series_throughput_over_time = []
+        labels_fmt, series_by_txn, series_throughput_over_time = [], {}, []
         test_period_str, total_duration_str, users_concurrent, steady_state = "N/A", "N/A", None, "No"
 
     # --- Build report data ---
@@ -170,29 +169,24 @@ def analyze():
             "RED": sum(1 for r in summary if r.get("RAG") == "RED"),
         },
         "chart_time_labels": labels_fmt,
-        "series_avg_by_txn": series_avg_by_txn,
-        "series_p90_by_txn": series_p90_by_txn,
-        "series_error_rate_by_txn": series_error_rate_by_txn,
+        "series_by_txn": series_by_txn,
         "series_throughput_over_time": series_throughput_over_time,
         "timestamp": datetime.utcnow().isoformat(),
-        # Persist user selections
         "rag_basis": rag_basis,
         "green_sla": green,
         "amber_sla": amber,
+        "metrics_selected": metrics,
     }
 
     # --- Generate base64 graphs ---
-    df_graph = df.copy()
-    df_graph.columns = [c.strip() for c in df_graph.columns]  # normalize for helpers
-
     try:
-        report_data["graph_img"] = generate_graphs_base64(df_graph, green, amber)
+        report_data["graph_img"] = generate_graphs_base64(df, green, amber)
     except Exception as e:
         print("Graph generation failed (response distribution):", e)
         report_data["graph_img"] = None
 
     try:
-        report_data["txn_progress_img"] = generate_transaction_progress_base64(df_graph)
+        report_data["txn_progress_img"] = generate_transaction_progress_base64(df)
     except Exception as e:
         print("Graph generation failed (transaction progress):", e)
         report_data["txn_progress_img"] = None
@@ -203,10 +197,7 @@ def analyze():
         print("Graph generation failed (RAG pie):", e)
         report_data["rag_pie_img"] = None
 
-    # --- Save report metadata ---
     save_report(report_data)
-
-    # ✅ This return must be indented inside the function
     return render_template("report.html", report_index=0, **report_data)
 
 
