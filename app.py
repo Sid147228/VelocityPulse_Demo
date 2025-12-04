@@ -120,12 +120,12 @@ def analyze():
     df = pd.read_csv(file_path)
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # Timestamp handling (support both 'timestamp' and JMeter 'timeStamp')
+    # Timestamp handling
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
     elif "timestamp" in df.columns or "timestamp" in df:
         df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
-    elif "timestamp" not in df.columns and "timestamp" not in df:
+    else:
         df["timestamp"] = pd.NaT
 
     # Ensure label column exists
@@ -154,19 +154,19 @@ def analyze():
             txn_series = {}
             if "avg" in metrics:
                 avg_ms = gb["elapsed"].mean()
-                txn_series["avg"] = [round(avg_ms.get(t, None)/1000.0, 3) if pd.notnull(avg_ms.get(t, None)) else None for t in time_labels]
+                txn_series["avg"] = [avg_ms.get(t, None)/1000.0 if pd.notnull(avg_ms.get(t, None)) else None for t in time_labels]
             if "p90" in metrics:
                 p90_ms = gb["elapsed"].quantile(0.90)
-                txn_series["p90"] = [round(p90_ms.get(t, None)/1000.0, 3) if pd.notnull(p90_ms.get(t, None)) else None for t in time_labels]
+                txn_series["p90"] = [p90_ms.get(t, None)/1000.0 if pd.notnull(p90_ms.get(t, None)) else None for t in time_labels]
             if "p95" in metrics:
                 p95_ms = gb["elapsed"].quantile(0.95)
-                txn_series["p95"] = [round(p95_ms.get(t, None)/1000.0, 3) if pd.notnull(p95_ms.get(t, None)) else None for t in time_labels]
+                txn_series["p95"] = [p95_ms.get(t, None)/1000.0 if pd.notnull(p95_ms.get(t, None)) else None for t in time_labels]
             if "samples" in metrics:
                 samples = gb.size()
                 txn_series["samples"] = [int(samples.get(t, 0)) for t in time_labels]
             if "error" in metrics:
                 err_pct = gb.apply(lambda x: 100.0 * ((~x["success"]).sum() / len(x)))
-                txn_series["error"] = [round(err_pct.get(t, None), 3) if pd.notnull(err_pct.get(t, None)) else None for t in time_labels]
+                txn_series["error"] = [err_pct.get(t, None) if pd.notnull(err_pct.get(t, None)) else None for t in time_labels]
             if any(v is not None for arr in txn_series.values() for v in arr):
                 series_by_txn[txn] = txn_series
 
@@ -193,6 +193,20 @@ def analyze():
             txn = row.get("Transaction")
             if txn:
                 row["samples"] = int(df[df["label"] == txn].shape[0])
+
+    # --- Convert NumPy scalars to native types ---
+    def _convert_numpy(val):
+        if isinstance(val, (np.integer,)):
+            return int(val)
+        if isinstance(val, (np.floating,)):
+            return float(val)
+        return val
+
+    for txn, series in series_by_txn.items():
+        for m, arr in series.items():
+            series[m] = [_convert_numpy(v) if v is not None else None for v in arr]
+
+    series_throughput_over_time = [_convert_numpy(v) for v in series_throughput_over_time]
 
     # --- Debug prints ---
     print("Labels_fmt:", labels_fmt[:5])
@@ -249,7 +263,7 @@ def analyze():
     # --- Save report metadata ---
     save_report(report_data)
 
-    return render_template("report.html", report_index=0, **report_data)
+    return render_template("report.html", report_index=0, **report_data
 
 
 @app.route("/report/<int:report_index>")
