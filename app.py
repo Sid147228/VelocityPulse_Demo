@@ -241,7 +241,7 @@ def analyze():
         "metrics_selected": metrics,
     }
 
-    # --- Generate base64 graphs ---
+    # --- Generate base64 graphs------
     try:
         report_data["graph_img"] = generate_graphs_base64(df, green, amber)
     except Exception as e:
@@ -264,14 +264,6 @@ def analyze():
     save_report(report_data)
 
     return render_template("report.html", report_index=0, **report_data)
-
-
-@app.route("/report/<int:report_index>")
-def report(report_index):
-    reports = load_history()
-    if 0 <= report_index < len(reports):
-        report_data = reports[report_index]
-        return render_template("report.html", report_index=report_index, **report_data)
     flash("Report not found")
     return redirect(url_for("history"))
 
