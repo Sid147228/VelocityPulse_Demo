@@ -47,6 +47,8 @@
   <p><strong>Steady state:</strong> {{ steady_state or 'Not available' }}</p>
 </div>
 
+{% set metric_labels = {'avg':'Average (s)','p90':'P90 (s)','p95':'P95 (s)','samples':'Samples','error':'Error %'} %}
+
 <div class="section">
   <h3>Transaction summary</h3>
   {% if summary|length == 0 %}
@@ -57,7 +59,7 @@
         <tr>
           <th>Transaction</th>
           {% for metric in metrics_selected %}
-            <th>{{ metric|capitalize }}</th>
+            <th>{{ metric_labels.get(metric, metric|capitalize) }}</th>
           {% endfor %}
           <th>RAG</th>
         </tr>
@@ -69,7 +71,11 @@
           {% for metric in metrics_selected %}
             <td>
               {% if row.get(metric) is not none %}
-                {{ "%.2f"|format(row.get(metric)|float) }}
+                {% if metric in ['avg','p90','p95'] %}
+                  {{ "%.2f"|format(row.get(metric)|float) }}
+                {% else %}
+                  {{ row.get(metric) }}
+                {% endif %}
               {% else %}—{% endif %}
             </td>
           {% endfor %}
@@ -144,33 +150,48 @@
 
   if (timeLabels.length > 0) {
     selectedMetrics.forEach(metric => {
-      new Chart(document.getElementById(metric + 'Chart'), {
-        type: 'line',
-        data: { labels: timeLabels, datasets: lineDatasets(seriesByTxn, metric) },
-        options: { plugins: { title: { display: true, text: metric.toUpperCase() + ' by transaction' } } }
-      });
-    });
-
-    new Chart(document.getElementById('throughputChart'), {
-      type: 'line',
-      data: {
-        labels: timeLabels,
-        datasets: [{
-          label: 'Throughput (requests/min)',
-          data: throughput,
-          borderColor: '#2a5298',
-          backgroundColor: '#2a5298',
-          fill: true,
-          tension: 0.2
-        }]
-      },
-      options: {
-        plugins: {
-          title: { display: true, text: 'Throughput over time' },
-          legend: { position: 'bottom' }
-        }
+      const el = document.getElementById(metric + 'Chart');
+      const datasets = lineDatasets(seriesByTxn, metric);
+      if (el && datasets.length > 0) {
+        new Chart(el, {
+          type: 'line',
+          data: { labels: timeLabels, datasets },
+          options: {
+            plugins: { title: { display: true, text: ({{ metric_labels|tojson }})[metric] + ' by transaction' } },
+            interaction: { mode: 'nearest', intersect: false },
+            responsive: true,
+            maintainAspectRatio: false
+          }
+        });
       }
     });
+
+    const tp = document.getElementById('throughputChart');
+    if (tp && Array.isArray(throughput) && throughput.some(v => v !== null && v !== 0)) {
+      new Chart(tp, {
+        type: 'line',
+        data: {
+          labels: timeLabels,
+          datasets: [{
+            label: 'Throughput (requests/min)',
+            data: throughput,
+            borderColor: '#2a5298',
+            backgroundColor: '#2a5298',
+            fill: true,
+            tension: 0.2
+          }]
+        },
+        options: {
+          plugins: {
+            title: { display: true, text: 'Throughput over time' },
+            legend: { position: 'bottom' }
+          },
+          interaction: { mode: 'nearest', intersect: false },
+          responsive: true,
+          maintainAspectRatio: false
+        }
+      });
+    }
   }
 </script>
 {% endif %}

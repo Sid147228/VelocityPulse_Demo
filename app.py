@@ -45,7 +45,7 @@ def save_report(report_data):
                 return float(obj)
             if isinstance(obj, (np.ndarray,)):
                 return obj.tolist()
-            return str(obj)  # fallback
+            return obj  # avoid forcing to string unless necessary
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(history, f, indent=2, default=convert)
     except Exception as e:
@@ -99,16 +99,39 @@ def analyze():
     summary, test_rag = parse_jmeter_csv(file_path, green, amber, rag_basis)
     summary, test_rag = evaluate_sla(summary, green, amber, rag_basis)
 
+    # Normalize summary keys to match metrics_selected
+    def _norm_row_keys(row):
+        mapping = {
+            "Avg (s)": "avg",
+            "90th % (s)": "p90",
+            "95th % (s)": "p95",
+            "Error %": "error",
+            "Samples": "samples",
+        }
+        out = dict(row)
+        for src, dst in mapping.items():
+            if src in row and row[src] is not None:
+                out[dst] = row[src]
+        return out
+
+    summary = [_norm_row_keys(r) for r in summary]
+
     # --- Build time-series data ---
     df = pd.read_csv(file_path)
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # Handle timestamp column
+    # Handle timestamp column (JMeter 'timeStamp' became 'timestamp' after lowering)
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
-    elif "timestamp" not in df.columns and "timestamp" not in df:
-        # fallback for JMeter "timeStamp"
-        df["timestamp"] = pd.to_datetime(pd.to_numeric(df.get("timestamp", df.get("timestamp")), errors="coerce"), unit="ms", errors="coerce")
+    else:
+        df["timestamp"] = pd.NaT  # no timestamp available
+
+    # Ensure label column exists
+    if "label" not in df.columns:
+        if "samplerlabel" in df.columns:
+            df["label"] = df["samplerlabel"].astype(str)
+        else:
+            df["label"] = "Transaction"
 
     df["elapsed"] = pd.to_numeric(df.get("elapsed"), errors="coerce")
     if "success" in df.columns:
@@ -187,7 +210,7 @@ def analyze():
         "metrics_selected": metrics,
     }
 
-        # --- Generate base64 graphs ---
+    # --- Generate base64 graphs ---
     try:
         report_data["graph_img"] = generate_graphs_base64(df, green, amber)
     except Exception as e:
