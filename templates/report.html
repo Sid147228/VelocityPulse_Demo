@@ -132,11 +132,12 @@
   const seriesByTxn = {{ series_by_txn|tojson }};
   const selectedMetrics = {{ metrics_selected|tojson }};
   const throughput = {{ series_throughput_over_time|tojson }};
+  const metricLabels = {{ metric_labels|tojson }};
 
   function lineDatasets(seriesByTxn, metric) {
     const txns = Object.keys(seriesByTxn);
     return txns
-      .filter(txn => seriesByTxn[txn][metric] && seriesByTxn[txn][metric].some(v => v !== null))
+      .filter(txn => Array.isArray(seriesByTxn[txn][metric]) && seriesByTxn[txn][metric].some(v => v !== null))
       .map((txn, idx) => ({
         label: txn,
         data: seriesByTxn[txn][metric],
@@ -157,12 +158,14 @@
           type: 'line',
           data: { labels: timeLabels, datasets },
           options: {
-            plugins: { title: { display: true, text: ({{ metric_labels|tojson }})[metric] + ' by transaction' } },
+            plugins: { title: { display: true, text: metricLabels[metric] + ' by transaction' } },
             interaction: { mode: 'nearest', intersect: false },
             responsive: true,
             maintainAspectRatio: false
           }
         });
+      } else if (el) {
+        el.insertAdjacentHTML('beforebegin', `<div class="alert">No data for ${metricLabels[metric]} chart.</div>`);
       }
     });
 
@@ -186,13 +189,16 @@
             title: { display: true, text: 'Throughput over time' },
             legend: { position: 'bottom' }
           },
-          interaction: { mode: 'nearest', intersect: false },
+                    interaction: { mode: 'nearest', intersect: false },
           responsive: true,
           maintainAspectRatio: false
         }
       });
+    } else if (tp) {
+      tp.insertAdjacentHTML('beforebegin', `<div class="alert">No throughput data available.</div>`);
     }
   }
 </script>
 {% endif %}
 {% endblock %}
+         
