@@ -263,7 +263,7 @@ def analyze():
     # --- Save report metadata ---
     save_report(report_data)
 
-    return render_template("report.html", report_index=0, **report_data
+    return render_template("report.html", report_index=0, **report_data)
 
 
 @app.route("/report/<int:report_index>")
