@@ -99,7 +99,7 @@ def analyze():
     summary, test_rag = parse_jmeter_csv(file_path, green, amber, rag_basis)
     summary, test_rag = evaluate_sla(summary, green, amber, rag_basis)
 
-    # Normalize summary keys to match metrics_selected
+    # Normalize summary keys
     def _norm_row_keys(row):
         mapping = {
             "Avg (s)": "avg",
@@ -120,20 +120,13 @@ def analyze():
     df = pd.read_csv(file_path)
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # Handle timestamp column (support both 'timestamp' and JMeter 'timeStamp')
+    # Timestamp handling (support both 'timestamp' and JMeter 'timeStamp')
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
+    elif "timestamp" in df.columns or "timestamp" in df:
+        df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
     elif "timestamp" not in df.columns and "timestamp" not in df:
-        if "timestamp" in df.columns:
-            df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
-        elif "timestamp" not in df.columns and "timestamp" not in df and "timestamp" not in df:
-            df["timestamp"] = pd.NaT
-    elif "timestamp" not in df.columns and "timestamp" not in df and "timestamp" not in df:
-        # fallback for JMeter 'timeStamp'
-        if "timestamp" in df.columns:
-            df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
-        elif "timestamp" not in df.columns and "timestamp" not in df and "timestamp" not in df:
-            df["timestamp"] = pd.NaT
+        df["timestamp"] = pd.NaT
 
     # Ensure label column exists
     if "label" not in df.columns:
@@ -174,7 +167,6 @@ def analyze():
             if "error" in metrics:
                 err_pct = gb.apply(lambda x: 100.0 * ((~x["success"]).sum() / len(x)))
                 txn_series["error"] = [round(err_pct.get(t, None), 3) if pd.notnull(err_pct.get(t, None)) else None for t in time_labels]
-            # Only add if at least one non-null value exists
             if any(v is not None for arr in txn_series.values() for v in arr):
                 series_by_txn[txn] = txn_series
 
@@ -201,6 +193,13 @@ def analyze():
             txn = row.get("Transaction")
             if txn:
                 row["samples"] = int(df[df["label"] == txn].shape[0])
+
+    # --- Debug prints ---
+    print("Labels_fmt:", labels_fmt[:5])
+    print("Series_by_txn keys:", list(series_by_txn.keys()))
+    for txn, series in series_by_txn.items():
+        for m, arr in series.items():
+            print(txn, m, arr[:5])
 
     # --- Build report data ---
     report_data = {
