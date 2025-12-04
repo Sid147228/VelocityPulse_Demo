@@ -242,6 +242,15 @@ def analyze():
         "metrics_selected": metrics,
     }
 
+
+@app.route("/report/<int:report_index>")
+def report(report_index):
+    # Load the report data from wherever you store it (JSON, DB, etc.)
+    report_data = load_report(report_index)
+    return render_template("report.html", report_index=report_index, **report_data)
+
+
+
     # --- Generate base64 graphs ---
     try:
         report_data["graph_img"] = generate_graphs_base64(df, green, amber)

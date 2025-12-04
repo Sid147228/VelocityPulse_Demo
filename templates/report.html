@@ -136,6 +136,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
 <script>
 window.addEventListener('DOMContentLoaded', () => {
+  Chart.register(ChartDataLabels);  // ✅ register plugin
+
   const palette = ['#2a5298','#dc3545','#28a745','#ffc107','#17a2b8','#6f42c1','#fd7e14','#20c997','#6610f2','#e83e8c'];
 
   const timeLabels = {{ chart_time_labels|tojson }};
@@ -144,41 +146,27 @@ window.addEventListener('DOMContentLoaded', () => {
   const throughput = {{ series_throughput_over_time|tojson }};
   const metricLabels = {{ metric_labels|tojson }};
 
-  console.log("Time labels:", timeLabels);
-  console.log("Selected metrics:", selectedMetrics);
-  console.log("Series by txn:", seriesByTxn);
-
   function lineDatasets(seriesByTxn, metric) {
     const txns = Object.keys(seriesByTxn);
-    return txns
-      .filter(txn => Array.isArray(seriesByTxn[txn][metric]) && seriesByTxn[txn][metric].some(v => v !== null))
-      .map((txn, idx) => ({
-        label: txn,
-        data: seriesByTxn[txn][metric],
-        borderColor: palette[idx % palette.length],
-        backgroundColor: palette[idx % palette.length],
-        tension: 0.2,
-        spanGaps: true,
-        fill: false,
-        borderWidth: 2,
-        pointRadius: 3,
-        pointHoverRadius: 5,
-        pointBackgroundColor: 'white'
-      }));
+    return txns.map((txn, idx) => ({
+      label: txn,
+      data: seriesByTxn[txn][metric],
+      borderColor: palette[idx % palette.length],
+      backgroundColor: palette[idx % palette.length],
+      tension: 0.2,
+      spanGaps: true,
+      fill: false,
+      borderWidth: 2,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      pointBackgroundColor: 'white'
+    }));
   }
 
   const chartOptions = (titleText) => ({
     plugins: {
-      title: {
-        display: true,
-        text: titleText,
-        font: { size: 16, weight: 'bold' }
-      },
-      legend: {
-        display: true,
-        position: 'bottom',
-        labels: { font: { size: 14 } }
-      },
+      title: { display: true, text: titleText, font: { size: 16, weight: 'bold' } },
+      legend: { display: true, position: 'bottom', labels: { font: { size: 14 } } },
       datalabels: {
         display: true,
         align: 'top',
@@ -188,20 +176,9 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     },
     scales: {
-      x: {
-        grid: { color: '#eee' },
-        ticks: { font: { size: 12 } }
-      },
-      y: {
-        grid: { color: '#eee' },
-        ticks: { font: { size: 12 } }
-      }
+      x: { grid: { color: '#eee' }, ticks: { font: { size: 12 } } },
+      y: { grid: { color: '#eee' }, ticks: { font: { size: 12 } } }
     },
-    elements: {
-      line: { borderWidth: 2 },
-      point: { radius: 3 }
-    },
-    interaction: { mode: 'nearest', intersect: false },
     responsive: true,
     maintainAspectRatio: false
   });
@@ -214,16 +191,13 @@ window.addEventListener('DOMContentLoaded', () => {
         new Chart(el, {
           type: 'line',
           data: { labels: timeLabels, datasets },
-          options: chartOptions(metricLabels[metric] + ' by transaction),
-          plugins: [ChartDataLabels]
+          options: chartOptions(metricLabels[metric] + ' by transaction')
         });
-      } else if (el) {
-        el.insertAdjacentHTML('beforebegin', `<div class="alert">No data for ${metricLabels[metric]} chart.</div>`);
       }
     });
 
     const tp = document.getElementById('throughputChart');
-    if (tp && Array.isArray(throughput) && throughput.some(v => v !== null && v !== 0)) {
+    if (tp) {
       new Chart(tp, {
         type: 'line',
         data: {
@@ -241,11 +215,8 @@ window.addEventListener('DOMContentLoaded', () => {
             pointBackgroundColor: 'white'
           }]
         },
-        options: chartOptions('Throughput over time'),
-        plugins: [ChartDataLabels]
+        options: chartOptions('Throughput over time')
       });
-    } else if (tp) {
-      tp.insertAdjacentHTML('beforebegin', `<div class="alert">No throughput data available.</div>`);
     }
   }
 });
