@@ -14,7 +14,13 @@
   th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: center; }
   .alert { margin: 10px 0; padding: 10px; border: 1px solid #ffeeba; background-color: #fff3cd; color: #856404; border-radius: 4px; }
   .graph-section { margin-top: 30px; }
-  .graph-section canvas, .graph-section img { max-width: 100%; height: auto; margin: 12px 0; }
+  /* ✅ Explicit height for charts */
+  .graph-section canvas {
+    width: 100% !important;
+    height: 320px !important;
+    margin: 12px 0;
+  }
+  .graph-section img { max-width: 100%; height: auto; margin: 12px 0; }
   .section { margin-top: 24px; }
 </style>
 
@@ -176,7 +182,7 @@
         data: {
           labels: timeLabels,
           datasets: [{
-            label: 'Throughput (requests/min)',
+            label: 'Throughput (requests/sec)',
             data: throughput,
             borderColor: '#2a5298',
             backgroundColor: '#2a5298',
@@ -189,16 +195,15 @@
             title: { display: true, text: 'Throughput over time' },
             legend: { position: 'bottom' }
           },
-                    interaction: { mode: 'nearest', intersect: false },
+          interaction: { mode: 'nearest', intersect: false },
           responsive: true,
           maintainAspectRatio: false
         }
       });
-    } else if (tp) {
+        } else if (tp) {
       tp.insertAdjacentHTML('beforebegin', `<div class="alert">No throughput data available.</div>`);
     }
   }
 </script>
 {% endif %}
 {% endblock %}
-         
