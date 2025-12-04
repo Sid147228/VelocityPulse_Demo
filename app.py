@@ -120,11 +120,15 @@ def analyze():
     df = pd.read_csv(file_path)
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # Handle timestamp column (JMeter 'timeStamp' became 'timestamp' after lowering)
+    # Handle timestamp column
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
-    else:
-        df["timestamp"] = pd.NaT  # no timestamp available
+    elif "timestamp" not in df.columns and "timestamp" not in df:
+        # fallback for JMeter "timeStamp"
+        if "timestamp" in df.columns:
+            df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
+        elif "timestamp" not in df.columns and "timestamp" not in df and "timestamp" not in df:
+            df["timestamp"] = pd.NaT
 
     # Ensure label column exists
     if "label" not in df.columns:
@@ -165,7 +169,9 @@ def analyze():
             if "error" in metrics:
                 err_pct = gb.apply(lambda x: 100.0 * ((~x["success"]).sum() / len(x)))
                 txn_series["error"] = [round(err_pct.get(t, None), 3) if pd.notnull(err_pct.get(t, None)) else None for t in time_labels]
-            series_by_txn[txn] = txn_series
+            # Only add if at least one non-null value exists
+            if any(v is not None for arr in txn_series.values() for v in arr):
+                series_by_txn[txn] = txn_series
 
         throughput_over_time = df.groupby(df["timestamp"].dt.floor("min")).size()
         series_throughput_over_time = [int(throughput_over_time.get(t, 0)) for t in time_labels]
@@ -184,7 +190,7 @@ def analyze():
         labels_fmt, series_by_txn, series_throughput_over_time = [], {}, []
         test_period_str, total_duration_str, users_concurrent, steady_state = "N/A", "N/A", None, "No"
 
-    # --- Build report data (always defined, outside if/else) ---
+    # --- Build report data ---
     report_data = {
         "report_name": report_name,
         "file_name": os.path.basename(file_path),
