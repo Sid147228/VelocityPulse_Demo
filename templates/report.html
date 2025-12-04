@@ -14,7 +14,6 @@
   th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: center; }
   .alert { margin: 10px 0; padding: 10px; border: 1px solid #ffeeba; background-color: #fff3cd; color: #856404; border-radius: 4px; }
   .graph-section { margin-top: 30px; }
-  /* ✅ Explicit height and styling for charts */
   .graph-section canvas {
     width: 100% !important;
     height: 320px !important;
@@ -135,6 +134,7 @@
 {% if not is_pdf %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+window.addEventListener('DOMContentLoaded', () => {
   const palette = ['#2a5298','#dc3545','#28a745','#ffc107','#17a2b8','#6f42c1','#fd7e14','#20c997','#6610f2','#e83e8c'];
 
   const timeLabels = {{ chart_time_labels|tojson }};
@@ -142,6 +142,10 @@
   const selectedMetrics = {{ metrics_selected|tojson }};
   const throughput = {{ series_throughput_over_time|tojson }};
   const metricLabels = {{ metric_labels|tojson }};
+
+  console.log("Time labels:", timeLabels);
+  console.log("Selected metrics:", selectedMetrics);
+  console.log("Series by txn:", seriesByTxn);
 
   function lineDatasets(seriesByTxn, metric) {
     const txns = Object.keys(seriesByTxn);
@@ -193,11 +197,14 @@
       }
     });
 
-    const tp = document.getElementById('throughputChart');
+        const tp = document.getElementById('throughputChart');
     if (tp && Array.isArray(throughput) && throughput.some(v => v !== null && v !== 0)) {
       new Chart(tp, {
         type: 'line',
-        data: { label: 'Throughput (requests/sec)',
+        data: {
+          labels: timeLabels,
+          datasets: [{
+            label: 'Throughput (requests/sec)',
             data: throughput,
             borderColor: '#2a5298',
             backgroundColor: '#2a5298',
@@ -213,8 +220,7 @@
       tp.insertAdjacentHTML('beforebegin', `<div class="alert">No throughput data available.</div>`);
     }
   }
+});
 </script>
 {% endif %}
 {% endblock %}
-
-         
