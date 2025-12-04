@@ -10,9 +10,9 @@ from werkzeug.utils import secure_filename
 # Helpers
 from jmeter_parser import parse_jmeter_csv
 from generate_TestResult import evaluate_sla
-from generate_graphs import generate_graphs_base64   # <-- updated
-from generate_transaction_progress import generate_transaction_progress_base64  # <-- updated
-from generate_rag_pie import generate_rag_pie_base64  # <-- updated
+from generate_graphs import generate_graphs_base64
+from generate_transaction_progress import generate_transaction_progress_base64
+from generate_rag_pie import generate_rag_pie_base64
 
 app = Flask(__name__)
 app.secret_key = "velocitypulse_demo"
@@ -84,7 +84,7 @@ def analyze():
     green = float(request.form.get("green", 2.0))
     amber = float(request.form.get("amber", 5.0))
     rag_basis = request.form.get("rag_basis", "avg")
-    metrics = request.form.getlist("metrics")  # e.g. ["avg","p90","p95","samples","error"]
+    metrics = request.form.getlist("metrics")  # ["avg","p90","p95","samples","error"]
 
     # Parse and evaluate SLA
     summary, test_rag = parse_jmeter_csv(file_path, green, amber, rag_basis)
@@ -93,13 +93,20 @@ def analyze():
     # --- Build time-series data ---
     df = pd.read_csv(file_path)
     df.columns = [c.strip().lower() for c in df.columns]
-    df['timestamp'] = pd.to_datetime(pd.to_numeric(df.get('timestamp', df.get('timestamp')), errors='coerce'),
-                                     unit="ms", errors="coerce")
-    df['elapsed'] = pd.to_numeric(df.get('elapsed'), errors="coerce")
-    if 'success' in df.columns:
-        df['success'] = df['success'].astype(str).str.lower().isin(["true", "1"])
+
+    # Handle timestamp column
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
+    elif "timestamp" not in df.columns and "timestamp" not in df:
+        # fallback for JMeter "timeStamp"
+        df["timestamp"] = pd.to_datetime(pd.to_numeric(df.get("timestamp", df.get("timestamp")), errors="coerce"), unit="ms", errors="coerce")
+
+    df["elapsed"] = pd.to_numeric(df.get("elapsed"), errors="coerce")
+    if "success" in df.columns:
+        df["success"] = df["success"].astype(str).str.lower().isin(["true", "1"])
     else:
-        df['success'] = True
+        df["success"] = True
+
     df = df.dropna(subset=["timestamp"]).sort_values("timestamp")
 
     if not df.empty:
@@ -146,7 +153,7 @@ def analyze():
         test_period_str, total_duration_str, users_concurrent, steady_state = "N/A", "N/A", None, "No"
 
     # --- Build report data ---
-    report_data = {
+        report_data = {
         "report_name": report_name,
         "file_name": os.path.basename(file_path),
         "summary": summary,
@@ -190,7 +197,10 @@ def analyze():
         print("Graph generation failed (RAG pie):", e)
         report_data["rag_pie_img"] = None
 
+    # --- Save report metadata ---
     save_report(report_data)
+
+    # ✅ Ensure this return is indented inside the function
     return render_template("report.html", report_index=0, **report_data)
 
 
@@ -203,14 +213,17 @@ def report(report_index):
     flash("Report not found")
     return redirect(url_for("history"))
 
+
 @app.route("/history")
 def history():
     reports = load_history()
     return render_template("history.html", reports=reports[:2])  # only show last 2 in demo
 
+
 @app.route("/about")
 def about():
     return render_template("about.html", version="Demo", build="Demo", codename="Restricted")
+
 
 if __name__ == "__main__":
     app.run(debug=True)
