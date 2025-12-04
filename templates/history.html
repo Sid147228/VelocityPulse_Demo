@@ -4,19 +4,45 @@
 <h1>Report History</h1>
 <p class="subtext">
   This demo only shows the most recent report.  
-  The full version contains all past reports with complete history.
+  The full version will list all past reports with full details.
 </p>
 
 {% if reports|length == 0 %}
   <div class="alert">No reports found. Run an analysis to generate history.</div>
 {% else %}
-  <ul>
-    {% for report in reports %}
-      <li>
-        <strong>{{ report.report_name }}</strong> — {{ report.test_date }}
-        <a href="{{ url_for('report', report_index=loop.index0) }}">View Report</a>
-      </li>
-    {% endfor %}
-  </ul>
+  <table>
+    <thead>
+      <tr>
+        <th>Test Name</th>
+        <th>Test Date</th>
+        <th>Duration</th>
+        <th>Concurrent Users</th>
+        <th>RAG</th>
+        <th>Report</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for report in reports %}
+      <tr>
+        <td>{{ report.report_name }}</td>
+        <td>{{ report.test_date }}</td>
+        <td>{{ report.total_duration }}</td>
+        <td>{{ report.concurrent_users }}</td>
+        <td>
+          {% if report.rag_result == 'RED' %}
+            <span class="rag rag-red">RED</span>
+          {% elif report.rag_result == 'AMBER' %}
+            <span class="rag rag-amber">AMBER</span>
+          {% elif report.rag_result == 'GREEN' %}
+            <span class="rag rag-green">GREEN</span>
+          {% else %}
+            <span class="rag">—</span>
+          {% endif %}
+        </td>
+        <td><a href="{{ url_for('report', report_index=loop.index0) }}">View Report</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 {% endif %}
 {% endblock %}
