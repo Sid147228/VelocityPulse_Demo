@@ -144,13 +144,14 @@ def analyze():
     df = df.dropna(subset=["timestamp"]).sort_values("timestamp")
 
     if not df.empty:
-        time_index = df["timestamp"].dt.floor("min")
+        # ✅ Use seconds granularity instead of minutes
+        time_index = df["timestamp"].dt.floor("s")
         time_labels = sorted(time_index.dropna().unique())
-        labels_fmt = [ts.strftime("%H:%M") for ts in time_labels]
+        labels_fmt = [ts.strftime("%H:%M:%S") for ts in time_labels]
 
         series_by_txn = {}
         for txn, g in df.groupby("label"):
-            gb = g.groupby(g["timestamp"].dt.floor("min"))
+            gb = g.groupby(g["timestamp"].dt.floor("s"))
             txn_series = {}
             if "avg" in metrics:
                 avg_ms = gb["elapsed"].mean()
@@ -170,17 +171,17 @@ def analyze():
             if any(v is not None for arr in txn_series.values() for v in arr):
                 series_by_txn[txn] = txn_series
 
-        throughput_over_time = df.groupby(df["timestamp"].dt.floor("min")).size()
+        throughput_over_time = df.groupby(df["timestamp"].dt.floor("s")).size()
         series_throughput_over_time = [int(throughput_over_time.get(t, 0)) for t in time_labels]
 
         ts_min, ts_max = df["timestamp"].min(), df["timestamp"].max()
         total_duration_sec = (ts_max - ts_min).total_seconds() if pd.notnull(ts_min) and pd.notnull(ts_max) else 0
-        test_period_str = f"{ts_min.strftime('%H:%M')}–{ts_max.strftime('%H:%M')}" if pd.notnull(ts_min) and pd.notnull(ts_max) else "N/A"
+        test_period_str = f"{ts_min.strftime('%H:%M:%S')}–{ts_max.strftime('%H:%M:%S')}" if pd.notnull(ts_min) and pd.notnull(ts_max) else "N/A"
         total_duration_str = f"{int(total_duration_sec)}s" if total_duration_sec > 0 else "N/A"
 
         users_concurrent = None
         if "threadname" in df.columns:
-            users_concurrent = df.groupby(df["timestamp"].dt.floor("min"))["threadname"].nunique().max()
+            users_concurrent = df.groupby(df["timestamp"].dt.floor("s"))["threadname"].nunique().max()
 
         steady_state = "Yes" if series_throughput_over_time and pd.Series(series_throughput_over_time).std() < 0.1 * max(series_throughput_over_time) else "No"
     else:
@@ -241,7 +242,7 @@ def analyze():
         "metrics_selected": metrics,
     }
 
-    # --- Generate base64 graphs------
+    # --- Generate base64 graphs ---
     try:
         report_data["graph_img"] = generate_graphs_base64(df, green, amber)
     except Exception as e:
@@ -264,6 +265,7 @@ def analyze():
     save_report(report_data)
 
     return render_template("report.html", report_index=0, **report_data)
+
     flash("Report not found")
     return redirect(url_for("history"))
 
