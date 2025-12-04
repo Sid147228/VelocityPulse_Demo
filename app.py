@@ -88,8 +88,8 @@ def upload():
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
-    file_path = request.form["file_path"]
-    report_name = request.form["report_name"]
+    file_path = request.form.get("file_path")
+    report_name = request.form.get("report_name", "Untitled Report")
     green = float(request.form.get("green", 2.0))
     amber = float(request.form.get("amber", 5.0))
     rag_basis = request.form.get("rag_basis", "avg")
@@ -120,15 +120,11 @@ def analyze():
     df = pd.read_csv(file_path)
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # Timestamp handling
     if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
-    elif "timestamp" in df.columns or "timestamp" in df:
         df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
     else:
         df["timestamp"] = pd.NaT
 
-    # Ensure label column exists
     if "label" not in df.columns:
         if "samplerlabel" in df.columns:
             df["label"] = df["samplerlabel"].astype(str)
@@ -144,7 +140,6 @@ def analyze():
     df = df.dropna(subset=["timestamp"]).sort_values("timestamp")
 
     if not df.empty:
-        # ✅ Use seconds granularity instead of minutes
         time_index = df["timestamp"].dt.floor("s")
         time_labels = sorted(time_index.dropna().unique())
         labels_fmt = [ts.strftime("%H:%M:%S") for ts in time_labels]
@@ -195,7 +190,6 @@ def analyze():
             if txn:
                 row["samples"] = int(df[df["label"] == txn].shape[0])
 
-    # --- Convert NumPy scalars to native types ---
     def _convert_numpy(val):
         if isinstance(val, (np.integer,)):
             return int(val)
@@ -209,14 +203,6 @@ def analyze():
 
     series_throughput_over_time = [_convert_numpy(v) for v in series_throughput_over_time]
 
-    # --- Debug prints ---
-    print("Labels_fmt:", labels_fmt[:5])
-    print("Series_by_txn keys:", list(series_by_txn.keys()))
-    for txn, series in series_by_txn.items():
-        for m, arr in series.items():
-            print(txn, m, arr[:5])
-
-    # --- Build report data ---
     report_data = {
         "report_name": report_name,
         "file_name": os.path.basename(file_path),
@@ -242,16 +228,6 @@ def analyze():
         "metrics_selected": metrics,
     }
 
-
-@app.route("/report/<int:report_index>")
-def report(report_index):
-    # Load the report data from wherever you store it (JSON, DB, etc.)
-    report_data = load_report(report_index)
-    return render_template("report.html", report_index=report_index, **report_data)
-
-
-
-    # --- Generate base64 graphs ---
     try:
         report_data["graph_img"] = generate_graphs_base64(df, green, amber)
     except Exception as e:
@@ -270,13 +246,26 @@ def report(report_index):
         print("Graph generation failed (RAG pie):", e)
         report_data["rag_pie_img"] = None
 
-    # --- Save report metadata ---
     save_report(report_data)
 
-    return render_template("report.html", report_index=0, **report_data)
+    # ✅ Always return a response
+    return render_template("report.html", **report_data)
+
+
+
+@app.route("/report/<int:report_index>")
+def report(report_index):
+    # Load the report data from wherever you store it (JSON, DB, etc.)
+    report_data = load_report(report_index)
+    return render_template("report.html", report_index=report_index, **report_data)
+
+
+
 
     flash("Report not found")
     return redirect(url_for("history"))
+
+
 
 
 @app.route("/history")
