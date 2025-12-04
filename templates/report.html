@@ -33,28 +33,19 @@
       <span class="rag rag-green">GREEN</span>
     {% else %}
       <span class="rag">UNKNOWN</span>
-
-<div class="meta">
-  <div><strong>RAG basis:</strong> {{ rag_basis }}</div>
-  <div><strong>Green SLA:</strong> {{ green_sla }}s</div>
-  <div><strong>Amber SLA:</strong> {{ amber_sla }}s</div>
-</div>
     {% endif %}
   </p>
+  <div class="meta">
+    <div><strong>RAG basis:</strong> {{ rag_basis }}</div>
+    <div><strong>Green SLA:</strong> {{ green_sla }}s</div>
+    <div><strong>Amber SLA:</strong> {{ amber_sla }}s</div>
+  </div>
   <p><strong>Test date:</strong> {{ test_date or 'Not available' }}</p>
   <p><strong>Test period:</strong> {{ test_period or 'Not available' }}</p>
   <p><strong>Total duration:</strong> {{ total_duration or 'Not available' }}</p>
   <p><strong>Concurrent users:</strong> {{ concurrent_users if concurrent_users is not none else 'Not available' }}</p>
   <p><strong>Steady state:</strong> {{ steady_state or 'Not available' }}</p>
 </div>
-
-{# Safe defaults for chart data #}
-{% set chart_time_labels = chart_time_labels or [] %}
-{% set series_avg_by_txn = series_avg_by_txn or {} %}
-{% set series_p90_by_txn = series_p90_by_txn or {} %}
-{% set series_error_rate_by_txn = series_error_rate_by_txn or {} %}
-{% set series_throughput_over_time = series_throughput_over_time or [] %}
-{% set rag_counts = rag_counts or {'GREEN': 0, 'AMBER': 0, 'RED': 0} %}
 
 <div class="section">
   <h3>Transaction summary</h3>
@@ -65,10 +56,9 @@
       <thead>
         <tr>
           <th>Transaction</th>
-          <th>Avg (s)</th>
-          <th>P90 (s)</th>
-          <th>P95 (s)</th>
-          <th>Error %</th>
+          {% for metric in metrics_selected %}
+            <th>{{ metric|capitalize }}</th>
+          {% endfor %}
           <th>RAG</th>
         </tr>
       </thead>
@@ -76,10 +66,13 @@
         {% for row in summary %}
         <tr>
           <td>{{ row.get("Transaction") }}</td>
-          <td>{% if row.get("Avg (s)") is not none %}{{ "%.2f"|format(row.get("Avg (s)")|float) }}{% else %}—{% endif %}</td>
-          <td>{% if row.get("90th % (s)") is not none %}{{ "%.2f"|format(row.get("90th % (s)")|float) }}{% else %}—{% endif %}</td>
-          <td>{% if row.get("95th % (s)") is not none %}{{ "%.2f"|format(row.get("95th % (s)")|float) }}{% else %}—{% endif %}</td>
-          <td>{% if row.get("Error %") is not none %}{{ "%.2f"|format(row.get("Error %")|float) }}{% else %}—{% endif %}</td>
+          {% for metric in metrics_selected %}
+            <td>
+              {% if row.get(metric) is not none %}
+                {{ "%.2f"|format(row.get(metric)|float) }}
+              {% else %}—{% endif %}
+            </td>
+          {% endfor %}
           <td>
             {% if row.get("RAG") == 'RED' %}
               <span class="rag rag-red">RED</span>
@@ -117,9 +110,9 @@
     <img src="data:image/png;base64,{{ graph_img }}" alt="Response Time Distribution">
     <img src="data:image/png;base64,{{ txn_progress_img }}" alt="Transaction Progress">
   {% else %}
-    <canvas id="avgByTxnChart"></canvas>
-    <canvas id="p90ByTxnChart"></canvas>
-    <canvas id="errorRateChart"></canvas>
+    {% for metric in metrics_selected %}
+      <canvas id="{{ metric }}Chart"></canvas>
+    {% endfor %}
     <canvas id="throughputChart"></canvas>
   {% endif %}
 </div>
@@ -129,13 +122,18 @@
 <script>
   const palette = ['#2a5298','#dc3545','#28a745','#ffc107','#17a2b8','#6f42c1','#fd7e14','#20c997','#6610f2','#e83e8c'];
 
-  function lineDatasetsFromSeries(seriesObj) {
-    const txns = Object.keys(seriesObj);
+  const timeLabels = {{ chart_time_labels|tojson }};
+  const seriesByTxn = {{ series_by_txn|tojson }};
+  const selectedMetrics = {{ metrics_selected|tojson }};
+  const throughput = {{ series_throughput_over_time|tojson }};
+
+  function lineDatasets(seriesByTxn, metric) {
+    const txns = Object.keys(seriesByTxn);
     return txns
-      .filter(txn => Array.isArray(seriesObj[txn]) && seriesObj[txn].some(v => v !== null))
+      .filter(txn => seriesByTxn[txn][metric] && seriesByTxn[txn][metric].some(v => v !== null))
       .map((txn, idx) => ({
         label: txn,
-        data: seriesObj[txn] || [],
+        data: seriesByTxn[txn][metric],
         borderColor: palette[idx % palette.length],
         backgroundColor: palette[idx % palette.length],
         tension: 0.2,
@@ -144,64 +142,36 @@
       }));
   }
 
-  const timeLabels = {{ chart_time_labels|tojson }};
-  const avgSeries = {{ series_avg_by_txn|tojson }};
-  const p90Series = {{ series_p90_by_txn|tojson }};
-  const errorSeries = {{ series_error_rate_by_txn|tojson }};
-  const throughput = {{ series_throughput_over_time|tojson }};
-
   if (timeLabels.length > 0) {
-    new Chart(document.getElementById('avgByTxnChart'), {
-      type: 'line',
-      data: { labels: timeLabels, datasets: lineDatasetsFromSeries(avgSeries) },
-      options: { plugins: { title: { display: true, text: 'Average response time (s) by transaction' } } }
+    selectedMetrics.forEach(metric => {
+      new Chart(document.getElementById(metric + 'Chart'), {
+        type: 'line',
+        data: { labels: timeLabels, datasets: lineDatasets(seriesByTxn, metric) },
+        options: { plugins: { title: { display: true, text: metric.toUpperCase() + ' by transaction' } } }
+      });
     });
 
-    new Chart(document.getElementById('p90ByTxnChart'), {
+    new Chart(document.getElementById('throughputChart'), {
       type: 'line',
-      data: { labels: timeLabels, datasets: lineDatasetsFromSeries(p90Series) },
-      options: { plugins: { title: { display: true, text: 'P90 response time (s) by transaction' } } }
-    });
-
-    new Chart(document.getElementById('errorRateChart'), {
-      type: 'line',
-      data: { labels: timeLabels, datasets: lineDatasetsFromSeries(errorSeries) },
-      options: { plugins: { title: { display: true, text: 'Error rate (%) by transaction' } } }
-    });
-
-        new Chart(document.getElementById('throughputChart'), {
-      type: 'line',
-      data: { 
-        labels: timeLabels, 
-        datasets: [
-          { 
-            label: 'Throughput (requests/min)', 
-            data: throughput, 
-            borderColor: '#2a5298', 
-            backgroundColor: '#2a5298', 
-            fill: true, 
-            tension: 0.2 
-          }
-        ] 
+      data: {
+        labels: timeLabels,
+        datasets: [{
+          label: 'Throughput (requests/min)',
+          data: throughput,
+          borderColor: '#2a5298',
+          backgroundColor: '#2a5298',
+          fill: true,
+          tension: 0.2
+        }]
       },
-      options: { 
-        plugins: { 
-          title: { display: true, text: 'Throughput over time' }, 
-          legend: { position: 'bottom' } 
-        } 
+      options: {
+        plugins: {
+          title: { display: true, text: 'Throughput over time' },
+          legend: { position: 'bottom' }
+        }
       }
     });
   }
 </script>
-
-{% for txn, metrics in series_by_txn.items() %}
-  <h3>{{ txn }}</h3>
-  <ul>
-    {% for metric, values in metrics.items() %}
-      <li>{{ metric }}: {{ values }}</li>
-    {% endfor %}
-  </ul>
-{% endfor %}
-
 {% endif %}
 {% endblock %}
