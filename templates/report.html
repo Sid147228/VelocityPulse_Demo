@@ -14,11 +14,14 @@
   th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: center; }
   .alert { margin: 10px 0; padding: 10px; border: 1px solid #ffeeba; background-color: #fff3cd; color: #856404; border-radius: 4px; }
   .graph-section { margin-top: 30px; }
-  /* ✅ Explicit height for charts */
+  /* ✅ Explicit height and styling for charts */
   .graph-section canvas {
     width: 100% !important;
     height: 320px !important;
-    margin: 12px 0;
+    margin: 24px 0;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 6px;
   }
   .graph-section img { max-width: 100%; height: auto; margin: 12px 0; }
   .section { margin-top: 24px; }
@@ -151,9 +154,29 @@
         backgroundColor: palette[idx % palette.length],
         tension: 0.2,
         spanGaps: true,
-        fill: false
+        fill: false,
+        borderWidth: 2,
+        pointRadius: 3
       }));
   }
+
+  const chartOptions = (titleText) => ({
+    plugins: {
+      title: { display: true, text: titleText },
+      legend: { display: true, position: 'bottom' }
+    },
+    scales: {
+      x: { grid: { color: '#eee' } },
+      y: { grid: { color: '#eee' } }
+    },
+    elements: {
+      line: { borderWidth: 2 },
+      point: { radius: 3 }
+    },
+    interaction: { mode: 'nearest', intersect: false },
+    responsive: true,
+    maintainAspectRatio: false
+  });
 
   if (timeLabels.length > 0) {
     selectedMetrics.forEach(metric => {
@@ -163,12 +186,7 @@
         new Chart(el, {
           type: 'line',
           data: { labels: timeLabels, datasets },
-          options: {
-            plugins: { title: { display: true, text: metricLabels[metric] + ' by transaction' } },
-            interaction: { mode: 'nearest', intersect: false },
-            responsive: true,
-            maintainAspectRatio: false
-          }
+          options: chartOptions(metricLabels[metric] + ' by transaction')
         });
       } else if (el) {
         el.insertAdjacentHTML('beforebegin', `<div class="alert">No data for ${metricLabels[metric]} chart.</div>`);
@@ -179,31 +197,24 @@
     if (tp && Array.isArray(throughput) && throughput.some(v => v !== null && v !== 0)) {
       new Chart(tp, {
         type: 'line',
-        data: {
-          labels: timeLabels,
-          datasets: [{
-            label: 'Throughput (requests/sec)',
+        data: { label: 'Throughput (requests/sec)',
             data: throughput,
             borderColor: '#2a5298',
             backgroundColor: '#2a5298',
             fill: true,
-            tension: 0.2
+            tension: 0.2,
+            borderWidth: 2,
+            pointRadius: 3
           }]
         },
-        options: {
-          plugins: {
-            title: { display: true, text: 'Throughput over time' },
-            legend: { position: 'bottom' }
-          },
-          interaction: { mode: 'nearest', intersect: false },
-          responsive: true,
-          maintainAspectRatio: false
-        }
+        options: chartOptions('Throughput over time')
       });
-        } else if (tp) {
+    } else if (tp) {
       tp.insertAdjacentHTML('beforebegin', `<div class="alert">No throughput data available.</div>`);
     }
   }
 </script>
 {% endif %}
 {% endblock %}
+
+         
