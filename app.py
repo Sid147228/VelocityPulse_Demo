@@ -120,11 +120,16 @@ def analyze():
     df = pd.read_csv(file_path)
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # Handle timestamp column
+    # Handle timestamp column (support both 'timestamp' and JMeter 'timeStamp')
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
     elif "timestamp" not in df.columns and "timestamp" not in df:
-        # fallback for JMeter "timeStamp"
+        if "timestamp" in df.columns:
+            df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
+        elif "timestamp" not in df.columns and "timestamp" not in df and "timestamp" not in df:
+            df["timestamp"] = pd.NaT
+    elif "timestamp" not in df.columns and "timestamp" not in df and "timestamp" not in df:
+        # fallback for JMeter 'timeStamp'
         if "timestamp" in df.columns:
             df["timestamp"] = pd.to_datetime(pd.to_numeric(df["timestamp"], errors="coerce"), unit="ms", errors="coerce")
         elif "timestamp" not in df.columns and "timestamp" not in df and "timestamp" not in df:
@@ -189,6 +194,13 @@ def analyze():
     else:
         labels_fmt, series_by_txn, series_throughput_over_time = [], {}, []
         test_period_str, total_duration_str, users_concurrent, steady_state = "N/A", "N/A", None, "No"
+
+    # --- Add samples count to summary rows ---
+    if "samples" in metrics:
+        for row in summary:
+            txn = row.get("Transaction")
+            if txn:
+                row["samples"] = int(df[df["label"] == txn].shape[0])
 
     # --- Build report data ---
     report_data = {
