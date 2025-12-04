@@ -133,6 +133,7 @@
 
 {% if not is_pdf %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
 <script>
 window.addEventListener('DOMContentLoaded', () => {
   const palette = ['#2a5298','#dc3545','#28a745','#ffc107','#17a2b8','#6f42c1','#fd7e14','#20c997','#6610f2','#e83e8c'];
@@ -160,18 +161,41 @@ window.addEventListener('DOMContentLoaded', () => {
         spanGaps: true,
         fill: false,
         borderWidth: 2,
-        pointRadius: 3
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        pointBackgroundColor: 'white'
       }));
   }
 
   const chartOptions = (titleText) => ({
     plugins: {
-      title: { display: true, text: titleText },
-      legend: { display: true, position: 'bottom' }
+      title: {
+        display: true,
+        text: titleText,
+        font: { size: 16, weight: 'bold' }
+      },
+      legend: {
+        display: true,
+        position: 'bottom',
+        labels: { font: { size: 14 } }
+      },
+      datalabels: {
+        display: true,
+        align: 'top',
+        anchor: 'end',
+        font: { size: 12, weight: 'bold' },
+        formatter: (value) => value !== null ? value.toFixed(2) : ''
+      }
     },
     scales: {
-      x: { grid: { color: '#eee' } },
-      y: { grid: { color: '#eee' } }
+      x: {
+        grid: { color: '#eee' },
+        ticks: { font: { size: 12 } }
+      },
+      y: {
+        grid: { color: '#eee' },
+        ticks: { font: { size: 12 } }
+      }
     },
     elements: {
       line: { borderWidth: 2 },
@@ -190,14 +214,15 @@ window.addEventListener('DOMContentLoaded', () => {
         new Chart(el, {
           type: 'line',
           data: { labels: timeLabels, datasets },
-          options: chartOptions(metricLabels[metric] + ' by transaction')
+          options: chartOptions(metricLabels[metric] + ' by transaction),
+          plugins: [ChartDataLabels]
         });
       } else if (el) {
         el.insertAdjacentHTML('beforebegin', `<div class="alert">No data for ${metricLabels[metric]} chart.</div>`);
       }
     });
 
-        const tp = document.getElementById('throughputChart');
+    const tp = document.getElementById('throughputChart');
     if (tp && Array.isArray(throughput) && throughput.some(v => v !== null && v !== 0)) {
       new Chart(tp, {
         type: 'line',
@@ -211,10 +236,13 @@ window.addEventListener('DOMContentLoaded', () => {
             fill: true,
             tension: 0.2,
             borderWidth: 2,
-            pointRadius: 3
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            pointBackgroundColor: 'white'
           }]
         },
-        options: chartOptions('Throughput over time')
+        options: chartOptions('Throughput over time'),
+        plugins: [ChartDataLabels]
       });
     } else if (tp) {
       tp.insertAdjacentHTML('beforebegin', `<div class="alert">No throughput data available.</div>`);
