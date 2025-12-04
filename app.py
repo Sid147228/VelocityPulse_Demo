@@ -152,8 +152,8 @@ def analyze():
         labels_fmt, series_by_txn, series_throughput_over_time = [], {}, []
         test_period_str, total_duration_str, users_concurrent, steady_state = "N/A", "N/A", None, "No"
 
-    # --- Build report data ---
-        report_data = {
+    # --- Build report data (always defined, outside if/else) ---
+    report_data = {
         "report_name": report_name,
         "file_name": os.path.basename(file_path),
         "summary": summary,
@@ -200,7 +200,6 @@ def analyze():
     # --- Save report metadata ---
     save_report(report_data)
 
-    # ✅ Ensure this return is indented inside the function
     return render_template("report.html", report_index=0, **report_data)
 
 
