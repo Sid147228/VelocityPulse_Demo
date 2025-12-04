@@ -4,6 +4,7 @@ os.environ["MPLCONFIGDIR"] = "/tmp"  # Ensure Matplotlib uses writable config pa
 from flask import Flask, render_template, request, redirect, url_for, flash
 import json
 import pandas as pd
+import numpy as np
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
@@ -37,8 +38,16 @@ def save_report(report_data):
     history = load_history()
     history.insert(0, report_data)
     try:
+        def convert(obj):
+            if isinstance(obj, (np.integer,)):
+                return int(obj)
+            if isinstance(obj, (np.floating,)):
+                return float(obj)
+            if isinstance(obj, (np.ndarray,)):
+                return obj.tolist()
+            return str(obj)  # fallback
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(history, f, indent=2)
+            json.dump(history, f, indent=2, default=convert)
     except Exception as e:
         print("⚠ Failed to save report metadata:", e)
 
@@ -164,9 +173,9 @@ def analyze():
         "concurrent_users": users_concurrent if users_concurrent is not None else "N/A",
         "steady_state": steady_state,
         "rag_counts": {
-            "GREEN": sum(1 for r in summary if r.get("RAG") == "GREEN"),
-            "AMBER": sum(1 for r in summary if r.get("RAG") == "AMBER"),
-            "RED": sum(1 for r in summary if r.get("RAG") == "RED"),
+            "GREEN": int(sum(1 for r in summary if r.get("RAG") == "GREEN")),
+            "AMBER": int(sum(1 for r in summary if r.get("RAG") == "AMBER")),
+            "RED": int(sum(1 for r in summary if r.get("RAG") == "RED")),
         },
         "chart_time_labels": labels_fmt,
         "series_by_txn": series_by_txn,
@@ -178,7 +187,7 @@ def analyze():
         "metrics_selected": metrics,
     }
 
-    # --- Generate base64 graphs ---
+        # --- Generate base64 graphs ---
     try:
         report_data["graph_img"] = generate_graphs_base64(df, green, amber)
     except Exception as e:
@@ -216,7 +225,10 @@ def report(report_index):
 @app.route("/history")
 def history():
     reports = load_history()
-    return render_template("history.html", reports=reports[:2])  # only show last 2 in demo
+    return render_template(
+        "history.html",
+        reports=reports[:1]  # demo: only show the most recent report
+    )
 
 
 @app.route("/about")
