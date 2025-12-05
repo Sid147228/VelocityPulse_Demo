@@ -56,44 +56,18 @@ def save_report(report_data):
 def home():
     return redirect(url_for("upload"))
 
-@app.route("/upload", methods=["GET", "POST"])
-def upload():
-    uploaded_file = None
-    uploaded_file_path = None
-    transactions = []
-
-    if request.method == "POST":
-        try:
-            if "file" in request.files:
-                file = request.files["file"]
-                if file.filename:
-                    filename = secure_filename(file.filename)
-                    file_path = os.path.join(UPLOAD_FOLDER, filename)
-                    file.save(file_path)
-                    uploaded_file = filename
-                    uploaded_file_path = file_path
-
-                    # Attempt to parse the uploaded file
-                    green, amber, rag_basis = 2.0, 5.0, "avg"
-                    summary, test_rag = parse_jmeter_csv(file_path, green, amber, rag_basis)
-                    transactions = [row.get("Transaction") for row in summary if row.get("Transaction")]
-        except Exception as e:
-            print("Upload error:", e)
-            flash("⚠️ Failed to process uploaded file. Please check format and size.")
-
-    return render_template("upload.html",
-                           uploaded_file=uploaded_file,
-                           uploaded_file_path=uploaded_file_path,
-                           transactions=transactions)
-
 @app.route("/analyze", methods=["POST"])
 def analyze():
     file_path = request.form.get("file_path")
+    if not file_path or not os.path.exists(file_path):
+        # Fallback if file_path is missing or invalid
+        return jsonify({"error": "No valid file path provided"}), 400
+
     report_name = request.form.get("report_name", "Untitled Report")
     green = float(request.form.get("green", 2.0))
     amber = float(request.form.get("amber", 5.0))
     rag_basis = request.form.get("rag_basis", "avg")
-    metrics = request.form.getlist("metrics")  # ["avg","p90","p95","samples","error"]
+    metrics = request.form.getlist("metrics") or ["avg", "p90", "p95", "samples", "error"]
 
     # Parse and evaluate SLA
     summary, test_rag = parse_jmeter_csv(file_path, green, amber, rag_basis)
@@ -248,8 +222,12 @@ def analyze():
 
     save_report(report_data)
 
-    # ✅ Always return a response
-    return render_template("report.html", **report_data)
+    # ✅ Always return a response, even if template fails
+    try:
+        return render_template("report.html", **report_data)
+    except Exception as e:
+        print("Render failed:", e)
+        return jsonify({"error": "Failed to render report", "details": str(e), "report_data": report_data}), 500
 
 
 
