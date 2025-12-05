@@ -1,7 +1,7 @@
 import os
 os.environ["MPLCONFIGDIR"] = "/tmp"  # Ensure Matplotlib uses writable config path
 
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 import json
 import pandas as pd
 import numpy as np
@@ -45,22 +45,59 @@ def save_report(report_data):
                 return float(obj)
             if isinstance(obj, (np.ndarray,)):
                 return obj.tolist()
-            return obj  # avoid forcing to string unless necessary
+            return obj
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(history, f, indent=2, default=convert)
     except Exception as e:
         print("⚠ Failed to save report metadata:", e)
+
+def load_report(report_index):
+    history = load_history()
+    if 0 <= report_index < len(history):
+        return history[report_index]
+    return None
 
 # --- Routes ---
 @app.route("/")
 def home():
     return redirect(url_for("upload"))
 
+@app.route("/upload", methods=["GET", "POST"])
+def upload():
+    uploaded_file = None
+    uploaded_file_path = None
+    transactions = []
+
+    if request.method == "POST":
+        try:
+            if "file" in request.files:
+                file = request.files["file"]
+                if file.filename:
+                    filename = secure_filename(file.filename)
+                    file_path = os.path.join(UPLOAD_FOLDER, filename)
+                    file.save(file_path)
+                    uploaded_file = filename
+                    uploaded_file_path = file_path
+
+                    # Attempt to parse the uploaded file
+                    green, amber, rag_basis = 2.0, 5.0, "avg"
+                    summary, test_rag = parse_jmeter_csv(file_path, green, amber, rag_basis)
+                    transactions = [row.get("Transaction") for row in summary if row.get("Transaction")]
+        except Exception as e:
+            print("Upload error:", e)
+            flash("⚠️ Failed to process uploaded file. Please check format and size.")
+
+    return render_template(
+        "upload.html",
+        uploaded_file=uploaded_file,
+        uploaded_file_path=uploaded_file_path,
+        transactions=transactions
+    )
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
     file_path = request.form.get("file_path")
     if not file_path or not os.path.exists(file_path):
-        # Fallback if file_path is missing or invalid
         return jsonify({"error": "No valid file path provided"}), 400
 
     report_name = request.form.get("report_name", "Untitled Report")
@@ -162,7 +199,7 @@ def analyze():
         for row in summary:
             txn = row.get("Transaction")
             if txn:
-                row["samples"] = int(df[df["label"] == txn].shape[0])
+                row["samples"] = int(df[df["label"] == txn.shape[0])
 
     def _convert_numpy(val):
         if isinstance(val, (np.integer,)):
@@ -230,20 +267,14 @@ def analyze():
         return jsonify({"error": "Failed to render report", "details": str(e), "report_data": report_data}), 500
 
 
-
 @app.route("/report/<int:report_index>")
 def report(report_index):
-    # Load the report data from wherever you store it (JSON, DB, etc.)
     report_data = load_report(report_index)
-    return render_template("report.html", report_index=report_index, **report_data)
-
-
-
-
-    flash("Report not found")
-    return redirect(url_for("history"))
-
-
+    if report_data:
+        return render_template("report.html", report_index=report_index, **report_data)
+    else:
+        flash("Report not found")
+        return redirect(url_for("history"))
 
 
 @app.route("/history")
